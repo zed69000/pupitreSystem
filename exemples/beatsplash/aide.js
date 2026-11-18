@@ -48,6 +48,45 @@
   function frappes(P, def){ P.sons = P.sons || {}; P.frappe = {}; const g = P.pistes ? 'base' : undefined, D = Object.assign({}, FRAPPES, def || {});
     for(const [k, d] of Object.entries(D)){ const nom = 'fr' + k; P.instruments[nom] = Object.assign(g ? {groupe: g} : {}, d.instr); P.sons[nom] = [nom, d.midi || 60, d.dur || 1, d.vel || .9]; P.frappe[k] = nom; }
     return P; }
-  window.K7M = {frappes, ROOT, acc, gamme, cahier, proche, ton, voix, motif, charley, harmonie, MODES};
+  /* Gabarit d'un morceau de Beat Splash : la forme commune (décompte · intro 4 · couplet 8 · [apprentissage 4] ·
+     refrain 8 · pause 4 · couplet 8 · refrain 8 · final 8 (transposé) · fin 2), l'harmonie, les gestes par section et les
+     sons de frappe. Le morceau fournit ce qui le rend unique : accords, groove de chaque mesure, hook, instruments.
+     cfg : bpm, swing, swingSur, humain, graine, salle, pompe, cle: ['A', 'ionien'], final (transposition du final),
+     intro[4], couplet[8], refrain[8], pause[4], fin[2] (noms d'accords ; la fin est jouée dans la tonalité du final),
+     decompte(add), introM / coupletM / refrainM(add, sec, m, c, cn, fort) / pauseM (une mesure chacune), finM(add, H.fin),
+     apprend: {nom, gestes, accords[4], mesure(add, sec, m, c, cn)}, lead: instrument du hook, leadOctave (transe),
+     hook: [[mesure, pas, midi, durée, 'C1' | 'H2' …]], gestesRefrain: [[mesure, pas, durée, 'S1' …]] (marques silencieuses),
+     gestes: {A, B, final} (gestes permis), instruments, frappe (variantes des sons de frappe), finalMesures (8 par défaut) */
+  function chanson(cfg){
+    const {N, add} = cahier(), H = {}, k = cfg.final || 0, fm = cfg.finalMesures || 8;
+    const tr = (noms, kk) => noms.map(n => acc(n, kk || 0));
+    H.decompte = [acc(cfg.intro[0])]; cfg.decompte(add);
+    H.intro = tr(cfg.intro); H.intro.forEach((c, m) => cfg.introM(add, 'intro', m, c, H.intro[(m + 1) % 4]));
+    H.A = tr(cfg.couplet); H.A.forEach((c, m) => cfg.coupletM(add, 'A', m, c, H.A[(m + 1) % 8]));
+    if(cfg.apprend){ H.apprend = tr(cfg.apprend.accords); H.apprend.forEach((c, m) => cfg.apprend.mesure(add, 'apprend', m, c, H.apprend[(m + 1) % 4])); }
+    const refrain = (sec, kk, fort, n) => { const off = 8 - n, harm = tr(cfg.refrain, kk).slice(off); H[sec] = harm;
+      harm.forEach((c, m) => cfg.refrainM(add, sec, m, c, harm[(m + 1) % harm.length], fort));
+      // (un final plus court reprend la fin du refrain)
+      cfg.hook.forEach(([m, p, nn, d, tag]) => { if(m < off) return; m -= off; add(sec, [cfg.lead, m, p, nn + kk, d, tag[0] === 'H' ? .9 : tag[1] === '1' ? 1 : .86, tag]); if(fort && cfg.leadOctave) add(sec, [cfg.leadOctave, m, p, nn + kk + 12, d, .5]); });
+      (cfg.gestesRefrain || []).forEach(([m, p, d, tag]) => { if(m >= off) add(sec, ['scr', m - off, p, 60, d, .5, tag]); });
+    };
+    refrain('B', 0, false, 8);
+    H.pause = tr(cfg.pause); H.pause.forEach((c, m) => cfg.pauseM(add, 'pause', m, c, H.pause[(m + 1) % 4]));
+    refrain('final', k, true, fm);
+    H.fin = tr(cfg.fin, k); cfg.finM(add, H.fin);
+    const g = cfg.gestes || {}, sections = {decompte: {mesures: 1, notes: N.decompte || []}, intro: {mesures: 4, notes: N.intro}, A: {mesures: 8, notes: N.A},
+      B: {mesures: 8, notes: N.B}, pause: {mesures: 4, notes: N.pause}, final: {mesures: fm, notes: N.final}, fin: {mesures: 2, notes: N.fin}};
+    if(cfg.apprend) sections.apprend = {mesures: 4, notes: N.apprend};
+    const forme = ['decompte', 'intro', 'A'].concat(cfg.apprend ? ['apprend'] : [], ['B', 'pause', 'A', 'B', 'final', 'fin']);
+    const ins = Object.assign({}, cfg.instruments); if(!ins.scr) ins.scr = {type: 'rim', vol: .001, joueur: true, groupe: 'base'};
+    const G0 = gamme(cfg.cle[0], cfg.cle[1]), Gk = G0.map(x => (x + k) % 12);
+    const P = {bpm: cfg.bpm, sig: [4, 4], swing: cfg.swing || .5, swingSur: cfg.swingSur || 16, humain: cfg.humain ?? 5, graine: cfg.graine || 1, pistes: true, pompe: !!cfg.pompe,
+      salle: cfg.salle || {taille: .5, amorti: .5, niveau: .5, predelai: .015}, instruments: ins, sections, forme,
+      jeu: {decompte: null, intro: ['Intro', 0, 'CJ'], A: ['Couplet', 1, g.A || 'CJ'], B: ['Refrain', 2, g.B || 'CJ'], pause: ['Pause', 'rest', 'C'], final: ['Final', 3, g.final || g.B || 'CJ'], fin: ['Fin', 'rest', 'CJ']},
+      harmonie: Object.fromEntries(Object.entries(H).map(([kk, v]) => [kk, harmonie(v)])), gamme: G0, gammes: {final: Gk, fin: Gk}};
+    if(cfg.apprend) P.jeu.apprend = [cfg.apprend.nom, 0, cfg.apprend.gestes];
+    return frappes(P, cfg.frappe);
+  }
+  window.K7M = {chanson, frappes, ROOT, acc, gamme, cahier, proche, ton, voix, motif, charley, harmonie, MODES};
   window.K7PARTITIONS = window.K7PARTITIONS || {};
 })();
