@@ -24,7 +24,8 @@
   // la k-ième note de l'accord au-dessus de 'base' (k = 0 fondamentale, 1 tierce, 2 quinte, 3 septième ; au-delà, octave)
   function ton(c, k, base){ const n = c.iv.length >= 4 ? 4 : c.iv.length, o = Math.floor(k/n), i = ((k % n) + n) % n; let m = base + ((c.fond - base) % 12 + 12) % 12; return m + c.iv[i] + 12*o; }
   // voicing conduit : place les notes choisies de l'accord au plus près du voicing précédent
-  function voix(prec, c, choix, lo, hi){ const pcs = choix.map(k => (c.fond + c.iv[k]) % 12); return window.PupitreEcriture.conduire(prec, pcs, lo, hi); }
+  // (une note demandée que l'accord n'a pas — la septième d'un accord de trois sons — devient la fondamentale)
+  function voix(prec, c, choix, lo, hi){ const pcs = [...new Set(choix.map(k => (c.fond + (c.iv[k] == null ? 0 : c.iv[k])) % 12))]; return window.PupitreEcriture.conduire(prec, pcs, lo, hi); }
   // rythme en texte → notes : X accent, x normal, g fantôme, o ouvert
   function motif(add, sec, instr, m, txt, midi, vels, tags){ [...txt].forEach((ch, p) => { const v = (vels || {X: 1, x: .72, g: .2, o: .75})[ch]; if(v != null) add(sec, [instr, m, p, midi, ch === 'o' ? 2 : 1, v, tags && tags[p]]); }); }
   // charley en doubles croches avec accents naturels (fort sur le temps, moyen sur le « et », doux entre)
