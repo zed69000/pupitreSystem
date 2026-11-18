@@ -610,7 +610,7 @@ function NOYAU() {
   // Fabrique une section (ou une couche d'une section) : renvoie deux Float32Array stéréo
   function rendre(P, nom, groupe, sr) {
     const t0 = maintenant(), INS = resoudre(P), E = evenements(P, INS, nom);
-    const evts = E.evts.filter(e => groupe === 'tout' || INS[e.instr].groupe === groupe).sort((x, y) => x.t - y.t || x.i - y.i);
+    const evts = E.evts.filter(e => groupe === '*' || (!(INS[e.instr].joueur && e.tag) && (groupe === 'tout' || INS[e.instr].groupe === groupe))).sort((x, y) => x.t - y.t || x.i - y.i);
     let fin = E.duree; for (const e of evts) fin = Math.max(fin, e.t + e.dur);
     const salle = Object.assign({ taille: 0.8, amorti: 0.35, niveau: 1, predelai: 0.02, largeur: 1 }, P.salle);
     const N = Math.ceil((fin + (P.queue ?? (1.5 + salle.taille * 3))) * sr);
@@ -641,6 +641,16 @@ function NOYAU() {
   }
 
   // Petite partition dense qui sert à mesurer la vitesse de l'appareil
+  // Partition d'une seule note (pour les notes du joueur) : même instrument, même salle, queue courte
+  function partitionNote(P, instr, midi, dur, vel) {
+    const salle = Object.assign({ taille: 0.8 }, P.salle);
+    return { bpm: P.bpm || 120, swing: 0.5, humain: 0, graine: 1, salle: P.salle, queue: P.queueNote ?? (0.3 + salle.taille * 0.6),
+      instruments: { [instr]: Object.assign({}, P.instruments[instr], { joueur: false, retard: 0, humain: false }) },
+      sections: { n: { mesures: 1, sig: [1, 16], notes: [[instr, 0, 0, midi, dur, vel]] } }, forme: ['n'] };
+  }
+  const velNote = v => Math.max(0.1, Math.round(v * 10) / 10);
+  const cleNote = (instr, midi, dur, vel) => instr + '|' + midi + '|' + (+dur).toFixed(2) + '|' + velNote(vel).toFixed(1);
+
   const SONDE = (() => {
     const notes = [];
     [50, 57, 62, 65, 69, 74].forEach(m => notes.push(['v', 0, 0, m, 16, 0.8]));
@@ -650,7 +660,7 @@ function NOYAU() {
     return { bpm: 120, queue: 0.4, salle: { niveau: 1 }, instruments: { v: { type: 'violons' }, c: { type: 'cors' }, s: { type: 'cordes_stacc' }, h: { type: 'charley' }, k: { type: 'timbales' } }, sections: { s: { mesures: 1, notes } }, forme: ['s'] };
   })();
 
-  return { rendre, evenements, chronologie, infoSection, resoudre, PRESETS, SONDE, mtof };
+  return { rendre, evenements, chronologie, infoSection, resoudre, partitionNote, cleNote, velNote, PRESETS, SONDE, mtof };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -680,6 +690,7 @@ class Pupitre {
 
   // Envoie une tâche à un worker, ou la fait sur le fil principal si les workers sont indisponibles
   _envoyer(w, tache, P) {
+    if (tache.P) P = tache.P;
     const msg = { id: tache.cle, gen: this._gen, partition: P, section: tache.nom, groupe: tache.groupe, sr: tache.sr };
     tache.depart = performance.now();
     if (w) { w.tache = tache; w.postMessage(msg); return; }
@@ -715,7 +726,15 @@ class Pupitre {
     this.sr = await this._frequence(o.qualite || 'auto'); if (gen !== this._gen) throw new Error('remplacé');
     this.stats.sr = this.sr;
     const vues = new Map(); for (const x of this.chrono.instances) if (!vues.has(x.nom)) vues.set(x.nom, x.debut);
-    this._file = []; for (const [nom, besoin] of vues) for (const g of this.groupes) this._file.push({ cle: nom + '|' + g, nom, groupe: g, besoin, duree: this.K.infoSection(P, nom).duree, sr: this.sr });
+    this._vides = new Set();
+    this._file = []; for (const [nom, besoin] of vues) for (const g of this.groupes) if (this.groupes.length > 1 && !this._evts(nom).evts.some(e => this.INS[e.instr].groupe === g && !(this.INS[e.instr].joueur && e.tag))) this._vides.add(nom + '|' + g); else this._file.push({ cle: nom + '|' + g, nom, groupe: g, besoin, duree: this.K.infoSection(P, nom).duree, sr: this.sr });
+    this.notesJ = new Map(); const K = this.K, vuesN = new Map();
+    for (const x of this.chrono.instances) for (const e of this._evts(x.nom).evts) {
+      if (!(this.INS[e.instr].joueur && e.tag)) continue;
+      const cle = 'note|' + K.cleNote(e.instr, e.midi, e.dur / this.K.infoSection(P, x.nom).s16, e.vel);
+      if (!vuesN.has(cle)) vuesN.set(cle, { cle, nom: 'n', groupe: '*', besoin: x.debut + e.t, duree: 0.6, sr: this.sr, P: K.partitionNote(P, e.instr, e.midi, e.dur / K.infoSection(P, x.nom).s16, K.velNote(e.vel)) });
+    }
+    this._file.push(...vuesN.values()); this._file.sort((a, b) => a.besoin - b.besoin);
     this._enCours = new Set(); this.stats.total = this._file.length; this._onProgres = o.onProgres; this._t0 = t0;
     return new Promise((res, rej) => { this._pret = { res, rej, gen }; this._distribuer(); });
   }
@@ -733,7 +752,7 @@ class Pupitre {
     const t = tache || [...this._enCours].find(x => x.cle === d.id); if (t) this._enCours.delete(t);
     if (!d.ok) { this._echec(d.err); return; }
     const b = this.ctx.createBuffer(2, d.L.length, this.sr); b.copyToChannel(d.L, 0); b.copyToChannel(d.R, 1);
-    this.buffers.set(d.id, b);
+    if (String(d.id).startsWith('note|')) this.notesJ.set(d.id.slice(5), b); else this.buffers.set(d.id, b);
     const s = this.stats; s.faites++; s.memoire += d.L.length * 8 / 1048576; s.voixMax = Math.max(s.voixMax, d.info.voixMax); s.pic = Math.max(s.pic, d.info.pic);
     this._mesures.push({ ms: d.info.ms, duree: d.info.duree }); s.msParSec = Math.round(Math.max(...this._mesures.map(m => m.ms / m.duree)));
     if (s.faites === s.total) s.toutEn = Math.round(performance.now() - this._t0);
@@ -783,7 +802,7 @@ class Pupitre {
     this._sA = this._morceau(now); this._cA = now; this.vit = v; this.t0 = this._heure(0);
     let k = Infinity;
     for (const s of [...this._sources]) {
-      if (s._quand > now) { k = Math.min(k, s._k); try { s.onended = null; s.stop(); s.disconnect(); } catch (e) {} this._sources.delete(s); }   // pas encore entendue : on la reposera
+      if (s._k >= 0 && s._quand > now) { k = Math.min(k, s._k); try { s.onended = null; s.stop(); s.disconnect(); } catch (e) {} this._sources.delete(s); }   // pas encore entendue : on la reposera
       else { const r = s.playbackRate; r.cancelScheduledValues(now); if (fondu > 0) { r.setValueAtTime(r.value, now); r.linearRampToValueAtTime(v, now + fondu); } else r.setValueAtTime(v, now); }
     }
     if (k < this._k) this._k = k;
@@ -802,13 +821,13 @@ class Pupitre {
     for (;;) {
       const x = this._instance(this._k); if (!x) break;
       const debut = this._heure(x.debut); if (debut > now + 1.2) break;
-      const bufs = this.groupes.map(g => this.buffers.get(x.nom + '|' + g));
+      const bufs = this.groupes.map(g => this._vides.has(x.nom + '|' + g) ? 'vide' : this.buffers.get(x.nom + '|' + g));
       if (bufs.some(b => !b)) { if (debut < now && !this._enRetard) { this.stats.decrochages++; this._enRetard = true; } break; }
       this._enRetard = false;
       let off = x.debut < this._depuis ? this._depuis - x.debut : 0, quand = this._heure(x.debut + off);
       if (quand < now + 0.01) { const r = now + 0.02 - quand; off += r * this.vit; quand += r; }       // en retard : on entre en cours de route, au bon endroit
       bufs.forEach((b, j) => {
-        if (off >= b.duration) return;
+        if (b === 'vide' || off >= b.duration) return;
         const s = ctx.createBufferSource(); s.buffer = b; s.playbackRate.value = this.vit; s._quand = quand; s._k = this._k; s.connect(this._bus[this.groupes[j]]); s.start(quand, off);
         this._sources.add(s); s.onended = () => { this._sources.delete(s); try { s.disconnect(); } catch (e) {} };
       });
@@ -833,6 +852,19 @@ class Pupitre {
     if (n) { const t = this.ctx.currentTime; n.gain.cancelScheduledValues(t); n.gain.setValueAtTime(n.gain.value, t); n.gain.setTargetAtTime(gain, t, Math.max(0.01, fondu / 3)); }
   }
 
+  /** Fait sonner une note du joueur (une entrée de beatmap() avec joueur: true) : à son heure exacte dans le morceau
+      si le geste est en avance, tout de suite s'il est en retard. Renvoie false si la note n'est pas (encore) fabriquée. */
+  jouerNote(n, o = {}) {
+    if (!this.lecture || !n) return false;
+    const b = this.notesJ && this.notesJ.get(n.cle); if (!b) return false;
+    const ctx = this.ctx, now = ctx.currentTime, quand = Math.max(now + 0.005, o.tout ? now + 0.005 : this._heure(n.t));
+    const g = this.INS[n.instr].groupe, bus = (this._bus && (this._bus[g] || this._bus.tout || Object.values(this._bus)[0]));
+    const s = ctx.createBufferSource(); s.buffer = b; s.playbackRate.value = this.vit; s._quand = Infinity; s._k = -1;
+    let dst = bus; if (o.gain != null && o.gain !== 1) { dst = ctx.createGain(); dst.gain.value = o.gain; dst.connect(bus); }
+    s.connect(dst); s.start(quand); this._sources.add(s); s.onended = () => { this._sources.delete(s); try { s.disconnect(); } catch (e) {} };
+    return true;
+  }
+
   /** Temps du morceau (s) à l'instant performance.now() = perfMs, tel qu'il est ENTENDU. */
   tempsA(perfMs) {
     if (this.t0 == null) return 0;
@@ -850,7 +882,7 @@ class Pupitre {
     const out = [], n = this.chrono.instances.length * (this.chrono.boucle ? cycles : 1);
     for (let k = 0; k < n; k++) {
       const x = this._instance(k);
-      for (const e of this._evts(x.nom).evts) { const m = { t: x.debut + e.t, instr: e.instr, midi: e.midi, vel: e.vel, mesure: e.mes, pas: e.pas, section: x.nom, tag: e.tag, duree: e.dur }; if (filtre(m)) out.push(m); }
+      for (const e of this._evts(x.nom).evts) { const m = { t: x.debut + e.t, instr: e.instr, midi: e.midi, vel: e.vel, mesure: e.mes, pas: e.pas, section: x.nom, tag: e.tag, duree: e.dur, joueur: !!(this.INS[e.instr].joueur && e.tag), cle: this.K.cleNote(e.instr, e.midi, e.dur / this.K.infoSection(this.P, x.nom).s16, e.vel) }; if (filtre(m)) out.push(m); }
     }
     return out.sort((a, b) => a.t - b.t);
   }
