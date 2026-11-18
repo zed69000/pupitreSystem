@@ -24,6 +24,7 @@ for (const [id, fn] of Object.entries(PARTS)) {
   });
   test(`Beat Splash · ${id} : beatmap par niveau`, () => {
     const P = fn(), I = K.resoudre(P);
+    if (P.boucle) return;   // musique de menu : pas de notes à jouer
     for (let lv = 1; lv <= 4; lv++) {
       let n = 0; for (const nom of P.forme) n += K.evenements(P, I, nom).evts.filter(e => /^[CJ]\d$/.test(e.tag || '') && +e.tag[1] <= lv).length;
       assert.ok(n > 40, `niveau ${lv} : seulement ${n} notes`);
