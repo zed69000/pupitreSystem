@@ -87,6 +87,11 @@
     if(cfg.apprend) P.jeu.apprend = [cfg.apprend.nom, 0, cfg.apprend.gestes];
     return frappes(P, cfg.frappe);
   }
-  window.K7M = {chanson, frappes, ROOT, acc, gamme, cahier, proche, ton, voix, motif, charley, harmonie, MODES};
+  // mélodie tirée des notes de l'accord de chaque mesure : motifs = [[pas, durée, note de l'accord (0 fond., 1, 2, 3, 4 = octave…), geste]],
+  // un motif par mesure (en boucle) ; elle ne peut pas sonner faux, le rythme et le contour lui donnent son caractère
+  function hookAuto(noms, base, motifs){ const out = []; noms.forEach((n, m) => { const c = acc(n); motifs[m % motifs.length].forEach(([p, d, i, tag]) => out.push([m, p, ton(c, i, base), d, tag])); }); return out; }
+  // batterie en texte : spec = {instr: 'motif de 16 pas', …} ; X accent, x normal, g fantôme ; tags = {instr: {pas: 'J1'}}
+  function batt(add, sec, m, spec, tags){ for(const [ins, txt] of Object.entries(spec)) [...txt].forEach((ch, p) => { const v = {X: 1, x: .75, g: .2, o: .7}[ch]; if(v != null) add(sec, [ins, m, p, ins === 'kick' ? 36 : 0, ch === 'o' ? 2 : 1.5, v, tags && tags[ins] && tags[ins][p]]); }); }
+  window.K7M = {hookAuto, batt, chanson, frappes, ROOT, acc, gamme, cahier, proche, ton, voix, motif, charley, harmonie, MODES};
   window.K7PARTITIONS = window.K7PARTITIONS || {};
 })();
