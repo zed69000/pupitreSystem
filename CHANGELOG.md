@@ -1,6 +1,10 @@
 # Journal
 
 
+## 1.4.0 — Sons de frappe, poignée des notes
+- `partition.sons` (instrument, note, durée, vélocité) : fabriqués au chargement, joués tout de suite par `jouerSon(nom)` (le bruit d'un geste).
+- `jouerNote()` renvoie une poignée `{ quand, stop(fondu) }` (note tenue lâchée trop tôt) et accepte `{ tout: true }` (au moment du geste).
+
 ## 1.3.0 — Synthés, orgue, guitare saturée
 - Classe `Synthe` (scie, carré, triangle ; voix désaccordées étalées, sous-oscillateur, filtre à enveloppe, saturation ; option `voyelle` à deux formants) et ses préréglages `synth_basse`, `synth_lead`, `synth_pluck`, `supersaw`, `synth_cuivres`, `chip`, `talkbox`.
 - Classe `Orgue` (tirettes, percussion, cabine tournante), préréglage `orgue`.

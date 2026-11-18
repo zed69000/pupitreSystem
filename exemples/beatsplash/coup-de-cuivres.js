@@ -153,7 +153,7 @@
     add('fin', ['kick', 1, 0, 36, 2, 1], ['crash', 1, 0, 0, 16, 1], ['basse', 1, 0, 40, 2, 1], ['caisse', 1, 0, 0, 2, 1, 'J1']); stab('fin', 1, 0, H.fin[1], 2, 1, 'C1');
     [76, 71, 64].forEach(n => add('fin', ['tb', 1, 0, n - 12, 2, .9]));
 
-    return {
+    return M.frappes({
       bpm: 106, sig: [4, 4], swing: .56, humain: 5, graine: 11, pistes: true,
       salle: {taille: .45, amorti: .55, niveau: .5, predelai: .012},
       instruments: {
@@ -182,6 +182,6 @@
       jeu: {decompte: null, intro: ['Intro', 0], A: ['Couplet', 1], B: ['Refrain', 2], pause: ['Pause', 'rest'], final: ['Final', 3], fin: ['Fin', 'rest']},
       harmonie: Object.fromEntries(Object.entries(H).map(([k, v]) => [k, M.harmonie(v)])),
       gamme: M.gamme('E', 'dorien'), gammes: {final: M.gamme('F#', 'dorien')},
-    };
+    }, {});
   };
 })();

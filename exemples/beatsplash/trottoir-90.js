@@ -94,7 +94,7 @@
     add('fin', ['kick', 0, 0, 36, 2, 1], ['cs', 0, 4, 0, 2, 1, 'J1'], ['bs', 0, 0, 36, 6, 1], ['tp', 0, 8, 75, 2, .9, 'C2'], ['tp', 0, 10, 74, 2, .9, 'C2'], ['tp', 0, 12, 72, 4, 1, 'C1']);
     rhodes('fin', 0, H.fin[0], 1); rhodes('fin', 1, H.fin[1], 1.1); add('fin', ['bs', 1, 0, 36, 8, .9], ['tp', 1, 0, 79, 6, .9, 'C1']);
 
-    return {
+    return M.frappes({
       bpm: 88, sig: [4, 4], swing: .62, humain: 7, graine: 53, pistes: true,
       salle: {taille: .42, amorti: .6, niveau: .4, predelai: .01},
       instruments: {
@@ -119,6 +119,6 @@
       jeu: {decompte: null, intro: ['Intro', 0, 'CJ'], A: ['Couplet', 1, 'CJ'], apprend: ['À deux doigts !', 0, 'CD'], B: ['Refrain', 2, 'CJD'], pause: ['Pause', 'rest', 'C'], final: ['Final', 3, 'CJD'], fin: ['Fin', 'rest', 'CJ']},
       harmonie: Object.fromEntries(Object.entries(H).map(([k, v]) => [k, M.harmonie(v)])),
       gamme: M.gamme('C', 'dorien'),
-    };
+    }, {C: {instr: {type: 'rim', vol: .28, verb: .05}}});
   };
 })();

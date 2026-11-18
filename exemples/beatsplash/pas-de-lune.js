@@ -107,7 +107,7 @@
     stabs('fin', 0, H.fin[0], [[0, 2]]); stabs('fin', 1, H.fin[1], [[0, 6]]);
     add('fin', ['kick', 1, 0, 36, 2, 1], ['bs', 1, 0, 35, 6, 1], ['cr', 1, 0, 0, 16, 1], ['ld', 1, 0, 83, 6, 1, 'C1']);
 
-    return {
+    return M.frappes({
       bpm: 116, sig: [4, 4], swing: .54, humain: 5, graine: 17, pistes: true,
       salle: {taille: .45, amorti: .55, niveau: .45, predelai: .01},
       instruments: {
@@ -131,6 +131,6 @@
       jeu: {decompte: null, intro: ['Intro', 0, 'CJ'], A: ['Couplet', 1, 'CJ'], apprend: ['Scratch !', 0, 'SJ'], B: ['Refrain', 2, 'CJS'], pause: ['Pause', 'rest', 'C'], final: ['Final', 3, 'CJS'], fin: ['Fin', 'rest', 'CJ']},
       harmonie: Object.fromEntries(Object.entries(H).map(([k, v]) => [k, M.harmonie(v)])),
       gamme: M.gamme('Bb', 'ionien'), gammes: {final: M.gamme('B', 'ionien'), fin: M.gamme('B', 'ionien')},
-    };
+    }, {});
   };
 })();

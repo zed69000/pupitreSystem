@@ -811,6 +811,8 @@ class Pupitre {
       const cle = 'note|' + K.cleNote(e.instr, e.midi, e.dur / this.K.infoSection(P, x.nom).s16, e.vel);
       if (!vuesN.has(cle)) vuesN.set(cle, { cle, nom: 'n', groupe: '*', besoin: x.debut + e.t, duree: 0.6, sr: this.sr, P: K.partitionNote(P, e.instr, e.midi, e.dur / K.infoSection(P, x.nom).s16, K.velNote(e.vel)) });
     }
+    for (const [nom, d] of Object.entries(P.sons || {})) vuesN.set('son|' + nom, { cle: 'son|' + nom, nom: 'n', groupe: '*', besoin: 0.5, duree: 0.4, sr: this.sr, P: K.partitionNote(P, d[0], d[1], d[2] ?? 1, d[3] ?? 0.9) });
+    this.sonsJ = new Map();
     this._file.push(...vuesN.values()); this._file.sort((a, b) => a.besoin - b.besoin);
     this._enCours = new Set(); this.stats.total = this._file.length; this._onProgres = o.onProgres; this._t0 = t0;
     return new Promise((res, rej) => { this._pret = { res, rej, gen }; this._distribuer(); });
@@ -829,7 +831,7 @@ class Pupitre {
     const t = tache || [...this._enCours].find(x => x.cle === d.id); if (t) this._enCours.delete(t);
     if (!d.ok) { this._echec(d.err); return; }
     const b = this.ctx.createBuffer(2, d.L.length, this.sr); b.copyToChannel(d.L, 0); b.copyToChannel(d.R, 1);
-    if (String(d.id).startsWith('note|')) this.notesJ.set(d.id.slice(5), b); else this.buffers.set(d.id, b);
+    if (String(d.id).startsWith('note|')) this.notesJ.set(d.id.slice(5), b); else if (String(d.id).startsWith('son|')) this.sonsJ.set(d.id.slice(4), b); else this.buffers.set(d.id, b);
     const s = this.stats; s.faites++; s.memoire += d.L.length * 8 / 1048576; s.voixMax = Math.max(s.voixMax, d.info.voixMax); s.pic = Math.max(s.pic, d.info.pic);
     this._mesures.push({ ms: d.info.ms, duree: d.info.duree }); s.msParSec = Math.round(Math.max(...this._mesures.map(m => m.ms / m.duree)));
     if (s.faites === s.total) s.toutEn = Math.round(performance.now() - this._t0);
@@ -930,15 +932,28 @@ class Pupitre {
   }
 
   /** Fait sonner une note du joueur (une entrée de beatmap() avec joueur: true) : à son heure exacte dans le morceau
-      si le geste est en avance, tout de suite s'il est en retard. Renvoie false si la note n'est pas (encore) fabriquée. */
+      si le geste est en avance, tout de suite s'il est en retard. Renvoie une poignée { quand, stop(fondu) },
+      ou false si la note n'est pas (encore) fabriquée. */
   jouerNote(n, o = {}) {
     if (!this.lecture || !n) return false;
     const b = this.notesJ && this.notesJ.get(n.cle); if (!b) return false;
     const ctx = this.ctx, now = ctx.currentTime, quand = Math.max(now + 0.005, o.tout ? now + 0.005 : this._heure(n.t));
-    const g = this.INS[n.instr].groupe, bus = (this._bus && (this._bus[g] || this._bus.tout || Object.values(this._bus)[0]));
+    const grp = this.INS[n.instr].groupe, bus = (this._bus && (this._bus[grp] || this._bus.tout || Object.values(this._bus)[0]));
     const s = ctx.createBufferSource(); s.buffer = b; s.playbackRate.value = this.vit; s._quand = Infinity; s._k = -1;
-    let dst = bus; if (o.gain != null && o.gain !== 1) { dst = ctx.createGain(); dst.gain.value = o.gain; dst.connect(bus); }
-    s.connect(dst); s.start(quand); this._sources.add(s); s.onended = () => { this._sources.delete(s); try { s.disconnect(); } catch (e) {} };
+    const g = ctx.createGain(); g.gain.value = o.gain ?? 1; g.connect(bus); s.connect(g); s.start(quand);
+    this._sources.add(s); s.onended = () => { this._sources.delete(s); try { s.disconnect(); g.disconnect(); } catch (e) {} };
+    // la poignée : stop(fondu) éteint la note en douceur (note tenue lâchée trop tôt)
+    return { quand, stop: (f = 0.08) => { const t = ctx.currentTime; g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(g.gain.value, t); g.gain.linearRampToValueAtTime(0, t + f); try { s.stop(t + f + 0.02); } catch (e) {} } };
+  }
+
+  /** Joue tout de suite un son déclaré dans partition.sons (bruit de frappe d'un geste, accordé au morceau). */
+  jouerSon(nom, o = {}) {
+    if (!this.lecture) return false;
+    const b = this.sonsJ && this.sonsJ.get(nom), d = this.P.sons && this.P.sons[nom]; if (!b || !d) return false;
+    const ctx = this.ctx, I = this.INS[d[0]], bus = this._bus && (this._bus[I && I.groupe] || this._bus.tout || Object.values(this._bus)[0]);
+    const s = ctx.createBufferSource(), g = ctx.createGain(); s.buffer = b; s.playbackRate.value = this.vit; s._quand = Infinity; s._k = -1;
+    g.gain.value = o.gain ?? 1; g.connect(bus); s.connect(g); s.start(ctx.currentTime + 0.003);
+    this._sources.add(s); s.onended = () => { this._sources.delete(s); try { s.disconnect(); g.disconnect(); } catch (e) {} };
     return true;
   }
 

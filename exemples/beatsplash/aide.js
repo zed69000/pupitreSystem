@@ -34,6 +34,20 @@
   // harmonie pour le jeu : liste d'accords par mesure → [[fond, pcs], …]
   const harmonie = liste => liste.map(c => [c.fond, c.pcs]);
 
-  window.K7M = {ROOT, acc, gamme, cahier, proche, ton, voix, motif, charley, harmonie, MODES};
+  // sons de frappe : ce que tu entends AU MOMENT de ton geste, en plus de ta note. Chaque brique a sa famille de son,
+  // la même dans tous les morceaux (on la reconnaît) ; un morceau peut changer le timbre, pas la famille.
+  // C couper = claquement sec · G diagonale = souffle · J cœur = battement grave · D deux doigts = frappe double · H tenue = scintillement.
+  // Percussions sans hauteur fixe : elles ne sonnent jamais faux.
+  const FRAPPES = {
+    C: {instr: {type: 'rim', vol: .3}},
+    G: {instr: {type: 'charley_ouvert', vol: .18, tenue: .22}},
+    J: {instr: {type: 'kick', vol: .32, f0: 95, f1: 50, tenue: .35}},
+    D: {instr: {type: 'clap', vol: .24}},
+    H: {instr: {type: 'ride', vol: .12}},
+  };
+  function frappes(P, def){ P.sons = P.sons || {}; P.frappe = {}; const g = P.pistes ? 'base' : undefined, D = Object.assign({}, FRAPPES, def || {});
+    for(const [k, d] of Object.entries(D)){ const nom = 'fr' + k; P.instruments[nom] = Object.assign(g ? {groupe: g} : {}, d.instr); P.sons[nom] = [nom, d.midi || 60, d.dur || 1, d.vel || .9]; P.frappe[k] = nom; }
+    return P; }
+  window.K7M = {frappes, ROOT, acc, gamme, cahier, proche, ton, voix, motif, charley, harmonie, MODES};
   window.K7PARTITIONS = window.K7PARTITIONS || {};
 })();

@@ -100,7 +100,7 @@
     M.voix(null, H.fin[1], [0, 1, 2, 3], 62, 74).forEach((n, k) => add('fin', ['tp', 1, 0, n + 12 > 84 ? n : n + 12, 4, 1, k === 3 ? 'C1' : undefined], ['tb', 1, 0, n - 12, 4, .9], ['pn', 1, 0, n, 4, .7]));
     add('fin', ['bs', 1, 0, 43, 4, 1], ['cym', 1, 0, 0, 16, .8], ['clv', 1, 0, 0, 1, 1, 'J1'], ['tim', 1, 0, 52, 2, 1]);
 
-    return {
+    return M.frappes({
       bpm: 100, sig: [4, 4], swing: .5, humain: 5, graine: 31, pistes: true,
       salle: {taille: .45, amorti: .5, niveau: .45, predelai: .01},
       instruments: {
@@ -125,6 +125,6 @@
       jeu: {decompte: null, intro: ['Intro', 0], A: ['Couplet', 1], B: ['Coro', 2], pause: ['Descarga', 'rest'], final: ['Mambo', 3], fin: ['Cierre', 'rest']},
       harmonie: Object.fromEntries(Object.entries(H).map(([k, v]) => [k, M.harmonie(v)])),
       gamme: M.gamme('G', 'harmonique'),
-    };
+    }, {C: {instr: {type: 'tom', vol: .22}, midi: 74}, J: {instr: {type: 'tom', vol: .24}, midi: 50}});
   };
 })();

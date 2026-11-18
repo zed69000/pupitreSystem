@@ -119,7 +119,7 @@
     N.fin = N.fin.map(n => ['vn', 'alt', 'vc', 'cbp', 'pno', 'cor'].includes(n[0]) ? [n[0], n[1], n[2], n[3] + 2, n[4], n[5], n[6]] : n);
     H.fin = [A('B:7'), A('E:maj')];
 
-    return {
+    return M.frappes({
       bpm: 126, sig: [4, 4], swing: .5, humain: 6, graine: 5, pistes: true,
       salle: {taille: .7, amorti: .45, niveau: .75, predelai: .02},
       instruments: {
@@ -145,6 +145,6 @@
       jeu: {decompte: null, intro: ['Intro', 0], A: ['Exposition', 1], B: ['Thème', 2], pause: ['Développement', 'rest'], final: ['Final', 3], fin: ['Fin', 'rest']},
       harmonie: Object.fromEntries(Object.entries(H).map(([k, v]) => [k, M.harmonie(v)])),
       gamme: G0, gammes: {pause: M.gamme('B', 'harmonique'), final: M.gamme('E', 'ionien'), fin: M.gamme('E', 'ionien')},
-    };
+    }, {C: {instr: {type: 'charley', tenue: .6, bruit: .05, base: 2600, hp: 2000, vol: .12, verb: .45}}, J: {instr: {type: 'grosse_caisse', vol: .28}}});
   };
 })();
