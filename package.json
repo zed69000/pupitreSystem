@@ -1,0 +1,15 @@
+{
+  "name": "pupitre",
+  "version": "1.0.0",
+  "description": "Moteur de musique des jeux de Seb : synthèse en Web Workers, lecture calée sur l'horloge audio, beatmap tirée de la partition. Sans fichier audio.",
+  "type": "module",
+  "main": "src/pupitre.js",
+  "exports": { ".": "./src/pupitre.js" },
+  "files": ["src"],
+  "scripts": {
+    "test": "node --test \"tests/*.test.mjs\"",
+    "banc": "node scripts/construire-banc.mjs"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}
