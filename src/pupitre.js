@@ -664,7 +664,7 @@ class Pupitre {
     lim.threshold.value = -6; lim.knee.value = 4; lim.ratio.value = 12; lim.attack.value = 0.002; lim.release.value = 0.15;
     this.maitre.connect(lim); lim.connect(o.sortie || ctx.destination);
     this.calibrage = 0;          // ms, décalage audio réglé par le joueur (Bluetooth : 150 à 300)
-    this.niveaux = {}; this.lecture = false; this.t0 = null; this._w = []; this._gen = 0; this.surFin = null;
+    this.niveaux = {}; this.lecture = false; this.t0 = null; this.vit = 1; this._sA = 0; this._cA = 0; this._w = []; this._gen = 0; this.surFin = null;
     this.stats = {};
   }
 
@@ -764,11 +764,30 @@ class Pupitre {
     this.arreter(0);
     const ctx = this.ctx; if (ctx.state !== 'running') ctx.resume();
     const depuis = o.depuis || 0, quand = o.quand ?? ctx.currentTime + 0.12;
-    this.t0 = quand - depuis; this._depuis = depuis; this._finSignale = false;
+    this.t0 = quand - depuis; this._depuis = depuis; this._finSignale = false; this.vit = 1; this._sA = 0; this._cA = this.t0;
     const jeu = ctx.createGain(); jeu.connect(this.maitre); this._jeu = jeu; this._bus = {}; this._sources = new Set();
     for (const g of this.groupes) { const n = ctx.createGain(); n.gain.value = this.niveaux[g] ?? 1; n.connect(jeu); this._bus[g] = n; }
     this._k = 0; while (true) { const x = this._instance(this._k); if (!x || x.debut + x.duree + 8 > depuis) break; this._k++; }
     this.lecture = true; this._tic(); this._minuteur = setInterval(() => this._tic(), 40);
+  }
+
+  // Temps du morceau ↔ heure audio, avec la vitesse de bande : morceau = sA + (heure − cA) × vitesse
+  _morceau(ct) { return this._sA + (ct - this._cA) * this.vit; }
+  _heure(s) { return this._cA + (s - this._sA) / this.vit; }
+
+  /** Vitesse de bande (1 = normale, 0,7 = ralenti, la hauteur suit comme sur une cassette). L'horloge et la beatmap restent justes. */
+  vitesse(v, fondu = 0) {
+    v = Math.max(0.25, Math.min(4, +v || 1)); if (v === this.vit) return;
+    const ctx = this.ctx, now = ctx.currentTime;
+    if (this.t0 == null) { this.vit = v; return; }
+    this._sA = this._morceau(now); this._cA = now; this.vit = v; this.t0 = this._heure(0);
+    let k = Infinity;
+    for (const s of [...this._sources]) {
+      if (s._quand > now) { k = Math.min(k, s._k); try { s.onended = null; s.stop(); s.disconnect(); } catch (e) {} this._sources.delete(s); }   // pas encore entendue : on la reposera
+      else { const r = s.playbackRate; r.cancelScheduledValues(now); if (fondu > 0) { r.setValueAtTime(r.value, now); r.linearRampToValueAtTime(v, now + fondu); } else r.setValueAtTime(v, now); }
+    }
+    if (k < this._k) this._k = k;
+    this._tic();
   }
 
   _instance(k) {
@@ -782,20 +801,20 @@ class Pupitre {
     const ctx = this.ctx, now = ctx.currentTime;
     for (;;) {
       const x = this._instance(this._k); if (!x) break;
-      const debut = this.t0 + x.debut; if (debut > now + 1.2) break;
+      const debut = this._heure(x.debut); if (debut > now + 1.2) break;
       const bufs = this.groupes.map(g => this.buffers.get(x.nom + '|' + g));
       if (bufs.some(b => !b)) { if (debut < now && !this._enRetard) { this.stats.decrochages++; this._enRetard = true; } break; }
       this._enRetard = false;
-      let off = x.debut < this._depuis ? this._depuis - x.debut : 0, quand = debut + off;
-      if (quand < now + 0.01) { const r = now + 0.02 - quand; off += r; quand += r; }       // en retard : on entre en cours de route, au bon endroit
+      let off = x.debut < this._depuis ? this._depuis - x.debut : 0, quand = this._heure(x.debut + off);
+      if (quand < now + 0.01) { const r = now + 0.02 - quand; off += r * this.vit; quand += r; }       // en retard : on entre en cours de route, au bon endroit
       bufs.forEach((b, j) => {
         if (off >= b.duration) return;
-        const s = ctx.createBufferSource(); s.buffer = b; s.connect(this._bus[this.groupes[j]]); s.start(quand, off);
+        const s = ctx.createBufferSource(); s.buffer = b; s.playbackRate.value = this.vit; s._quand = quand; s._k = this._k; s.connect(this._bus[this.groupes[j]]); s.start(quand, off);
         this._sources.add(s); s.onended = () => { this._sources.delete(s); try { s.disconnect(); } catch (e) {} };
       });
       this._k++;
     }
-    if (!this.chrono.boucle && !this._instance(this._k) && !this._finSignale && now > this.t0 + this.chrono.duree) { this._finSignale = true; this.surFin && this.surFin(); }
+    if (!this.chrono.boucle && !this._instance(this._k) && !this._finSignale && this._morceau(now) > this.chrono.duree) { this._finSignale = true; this.surFin && this.surFin(); }
   }
 
   arreter(fondu = 0.05) {
@@ -820,7 +839,7 @@ class Pupitre {
     const ctx = this.ctx; let ct = null;
     if (ctx.getOutputTimestamp) { const ts = ctx.getOutputTimestamp(); if (ts && ts.contextTime > 0 && ts.performanceTime > 0) ct = ts.contextTime + (perfMs - ts.performanceTime) / 1000; }
     if (ct == null) ct = ctx.currentTime - (ctx.outputLatency || ctx.baseLatency || 0) + (perfMs - performance.now()) / 1000;
-    return ct - this.t0 - this.calibrage / 1000;
+    return this._morceau(ct - this.calibrage / 1000);
   }
   position() { return this.tempsA(performance.now()); }
 
