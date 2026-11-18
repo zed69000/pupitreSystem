@@ -188,6 +188,7 @@ function NOYAU() {
       m /= n0; for (let i = 0; i < n0; i++) this.buf[i] -= m;
       this.w = n0 % this.N;
       this.env = new Env(sr, 0.0005, 1e4, 1, I.etouffe ?? 0.06, this.off); this.vie = Math.ceil(sr * (I.tenue ?? 1.5) * 1.1);
+      if (I.drive) { this.drv = I.drive * (0.6 + 0.4 * v); this.cab = new SVF().set(sr, I.cab ?? 3200, 0.75); this.cab2 = new SVF().set(sr, (I.cab ?? 3200) * 1.9, 0.6); }
     }
     render(L, R, S, a, b) {
       const buf = this.buf, N = this.N, d = this.d, c = this.c, loss = this.loss, E = this.env;
@@ -195,7 +196,9 @@ function NOYAU() {
         const e = E.next(); let r = this.w - d; if (r < 0) r += N;
         const r0 = r | 0, fr = r - r0, r1 = r0 + 1 === N ? 0 : r0 + 1, y = buf[r0] + (buf[r1] - buf[r0]) * fr;
         this.z += c * (y - this.z); buf[this.w] = this.z * loss; this.w = this.w + 1 === N ? 0 : this.w + 1;
-        const x = y * e * 0.9; L[i] += x * this.gl; R[i] += x * this.gr; S[i] += x * this.gs;
+        let x = y * e * 0.9;
+        if (this.drv) x = this.cab2.lp(this.cab.lp(sat(x * this.drv * 5) * 0.55));
+        L[i] += x * this.gl; R[i] += x * this.gr; S[i] += x * this.gs;
       }
       return !(E.fini() || E.n > this.vie);
     }
@@ -340,6 +343,70 @@ function NOYAU() {
         q = p[1]; const s1 = 2 * q - 1 - blep(q, dt[1]); p[1] = q + dt[1] >= 1 ? q + dt[1] - 1 : q + dt[1];
         const xl = this.fl.lp(s0) * e * 0.3, xr = this.fr.lp(s1) * e * 0.3;
         L[i] += xl * this.gl; R[i] += xr * this.gr; S[i] += (xl + xr) * 0.5 * this.gs;
+      }
+      return !E.fini();
+    }
+  }
+
+  // Synthé soustractif : scie, carré ou triangle, voix désaccordées étalées en stéréo, sous-oscillateur,
+  // filtre à enveloppe (le « wouw » de chaque note), saturation douce. Option voyelle : deux formants (talkbox)
+  const FORMANTS = { a: [800, 1200], o: [500, 900], ou: [350, 800], e: [450, 1900], i: [300, 2300] };
+  class Synthe extends Voix {
+    constructor(I, e, sr, idx) {
+      super(I, e, sr, idx); const v = e.vel, f = this.f, R0 = rng(idx * 7919 + 3);
+      this.env = new Env(sr, I.attaque ?? 0.005, I.chute ?? 0.3, I.soutien ?? 0.6, I.relache ?? 0.08, this.off);
+      const n = Math.max(1, I.voix ?? 1), det = I.desaccord ?? 0; this.n = n; this.dt = new Float64Array(n); this.p = new Float64Array(n); this.pan = new Float32Array(n);
+      for (let k = 0; k < n; k++) { const u = n === 1 ? 0 : k / (n - 1) * 2 - 1; this.dt[k] = f * Math.pow(2, u * det / 1200) / sr; this.p[k] = R0(); this.pan[k] = u; }
+      this.onde = I.onde || 'scie'; this.pw = I.largeur ?? 0.5; this.sub = I.sub ?? 0; this.ps = 0; this.dts = f / 2 / sr;
+      this.fl = new SVF(); this.fr = new SVF();
+      this.fc0 = clamp(f * (I.suit ?? 1) + (I.filtre ?? 2500) * (0.4 + 0.6 * v), 60, 16000); this.fc1 = clamp(f * (I.suit ?? 1) + (I.filtreBas ?? 300), 40, 16000);
+      this.ft = I.balayage ?? 0.15; this.q = I.q ?? 0.9; this.drive = I.drive ?? 1;
+      this.vr = (5.2 + R0() * 0.5) / sr; this.vp = 0; this.vd = (I.vibrato ?? 0) * 0.0578; this.va = I.vibratoApres ?? 0.3;
+      const F = I.voyelle && FORMANTS[I.voyelle]; if (F) { this.f1 = new SVF().set(sr, F[0], 5); this.f2 = new SVF().set(sr, F[1], 7); this.f3 = new SVF().set(sr, F[0], 5); this.f4 = new SVF().set(sr, F[1], 7); }
+      this.gn = 0.34 / Math.sqrt(n);
+    }
+    _osc(k, d) {
+      const q = this.p[k]; let s;
+      if (this.onde === 'carre') s = (q < this.pw ? 1 : -1) + blep(q, d) - blep((q - this.pw + 1) % 1, d);
+      else if (this.onde === 'triangle') s = 4 * Math.abs(q - 0.5) - 1;
+      else s = 2 * q - 1 - blep(q, d);
+      this.p[k] = q + d >= 1 ? q + d - 1 : q + d; return s;
+    }
+    render(L, R, S, a, b) {
+      const sr = this.sr, E = this.env, t = E.n / sr, fc = this.fc1 + (this.fc0 - this.fc1) * Math.exp(-t / this.ft);
+      this.fl.set(sr, fc, this.q); this.fr.set(sr, fc * 1.01, this.q);
+      const va = this.vd * clamp((t - this.va) / 0.4, 0, 1), n = this.n, g = this.gn;
+      for (let i = a; i < b; i++) {
+        const e = E.next(), m = 1 + va * sn(this.vp); this.vp += this.vr; if (this.vp >= 1) this.vp -= 1;
+        let l = 0, r = 0; for (let k = 0; k < n; k++) { const s = this._osc(k, this.dt[k] * m), pk = this.pan[k]; l += s * (1 - pk * 0.6); r += s * (1 + pk * 0.6); }
+        if (this.sub) { const d = this.dts * m, q = this.ps, s = (q < 0.5 ? 1 : -1) * this.sub; this.ps = q + d >= 1 ? q + d - 1 : q + d; l += s; r += s; }
+        let xl = this.fl.lp(l * g), xr = this.fr.lp(r * g);
+        if (this.f1) { xl = this.f1.bp(xl) * 1.8 + this.f2.bp(xl) * 1.3; xr = this.f3.bp(xr) * 1.8 + this.f4.bp(xr) * 1.3; }
+        xl = sat(xl * this.drive) * e * 0.8; xr = sat(xr * this.drive) * e * 0.8;
+        L[i] += xl * this.gl; R[i] += xr * this.gr; S[i] += (xl + xr) * 0.5 * this.gs;
+      }
+      return !E.fini();
+    }
+  }
+
+  // Orgue à tirettes : sinus aux pieds 16, 5 1/3, 8, 4, 2 2/3, 2, 1 3/5, 1 1/3, 1 ; percussion ; cabine tournante
+  const PIEDS = [0.5, 1.5, 1, 2, 3, 4, 5, 6, 8];
+  class Orgue extends Voix {
+    constructor(I, e, sr, idx) {
+      super(I, e, sr, idx); const f = this.f, R0 = rng(idx * 3571 + 11), T = I.tirettes || [0.6, 0.3, 1, 0.7, 0.35, 0.4, 0, 0, 0.25];
+      this.env = new Env(sr, 0.004, 1e4, 1, I.relache ?? 0.04, this.off);
+      this.h = []; let tot = 0; PIEDS.forEach((r, k) => { if (T[k] > 0 && f * r < sr * 0.45) { this.h.push({ dt: f * r / sr, a: T[k], p: R0() }); tot += T[k]; } });
+      this.norm = 0.42 / Math.max(1, tot); this.perc = (I.percussion ?? 0.5) * e.vel; this.pd = dec(0.18, sr); this.pp = 0; this.pdt = f * 3 / sr;
+      this.lr = (I.cabine ?? 5.6) / sr; this.lp = R0();
+    }
+    render(L, R, S, a, b) {
+      const E = this.env, H = this.h, nh = H.length;
+      for (let i = a; i < b; i++) {
+        const e = E.next(); let x = 0;
+        for (let k = 0; k < nh; k++) { const o = H[k]; x += sn(o.p) * o.a; o.p += o.dt; if (o.p >= 1) o.p -= 1; }
+        x = x * this.norm + sn(this.pp) * this.perc * 0.2; this.perc *= this.pd; this.pp += this.pdt; if (this.pp >= 1) this.pp -= 1;
+        const c = sn(this.lp); this.lp += this.lr; if (this.lp >= 1) this.lp -= 1;
+        x *= e; L[i] += x * this.gl * (1 + 0.28 * c); R[i] += x * this.gr * (1 - 0.28 * c); S[i] += x * this.gs;
       }
       return !E.fini();
     }
@@ -497,7 +564,7 @@ function NOYAU() {
     }
   }
 
-  const CLASSES = { Rhodes, Piano, Basse, Corde, Cordes, Cuivres, Bois, Cloche, Choeur, Nappe, Kick, Caisse, Metal, Clap, Tom, Timbale, GrosseCaisse, Shaker, Rim };
+  const CLASSES = { Synthe, Orgue, Rhodes, Piano, Basse, Corde, Cordes, Cuivres, Bois, Cloche, Choeur, Nappe, Kick, Caisse, Metal, Clap, Tom, Timbale, GrosseCaisse, Shaker, Rim };
 
   // ─── Réverbe (Freeverb) : une par rendu, alimentée par les envois des voix ─────
   function reverbe(S, L, R, n, sr, o) {
@@ -551,6 +618,16 @@ function NOYAU() {
     cloches_tubes: { classe: 'Cloche', modes: [[0.5, 0.5, 3], [1, 1, 2.5], [1.19, 0.4, 1.8], [1.71, 0.35, 1.2], [2, 0.3, 1], [2.74, 0.2, 0.6], [3, 0.15, 0.5]], vol: 0.3, verb: 0.4 },
     choeur: { classe: 'Choeur', voyelle: 'a', vol: 0.4, verb: 0.45, etale: 0.6 },
     nappe: { classe: 'Nappe', vol: 0.3, verb: 0.4 },
+    synth_basse: { classe: 'Synthe', onde: 'scie', sub: 0.6, filtre: 1400, filtreBas: 140, balayage: 0.12, q: 1.4, drive: 1.6, chute: 0.4, soutien: 0.55, relache: 0.04, vol: 0.5, verb: 0.02 },
+    synth_lead: { classe: 'Synthe', onde: 'scie', voix: 2, desaccord: 8, filtre: 5000, filtreBas: 1800, balayage: 0.4, vibrato: 0.08, vibratoApres: 0.25, chute: 0.6, soutien: 0.8, vol: 0.3, verb: 0.3 },
+    synth_pluck: { classe: 'Synthe', onde: 'carre', largeur: 0.35, voix: 2, desaccord: 6, filtre: 4500, filtreBas: 200, balayage: 0.08, q: 1.2, chute: 0.25, soutien: 0, relache: 0.15, vol: 0.3, verb: 0.3 },
+    supersaw: { classe: 'Synthe', onde: 'scie', voix: 5, desaccord: 22, filtre: 7000, filtreBas: 3000, balayage: 0.6, attaque: 0.01, soutien: 0.85, vol: 0.22, verb: 0.4, etale: 0.3 },
+    synth_cuivres: { classe: 'Synthe', onde: 'scie', voix: 3, desaccord: 10, filtre: 3500, filtreBas: 600, balayage: 0.18, attaque: 0.02, q: 1.1, soutien: 0.7, vol: 0.3, verb: 0.25 },
+    chip: { classe: 'Synthe', onde: 'carre', largeur: 0.25, filtre: 12000, filtreBas: 12000, q: 0.7, attaque: 0.001, chute: 0.2, soutien: 0.7, relache: 0.02, vol: 0.16, verb: 0.05 },
+    talkbox: { classe: 'Synthe', onde: 'scie', voix: 2, desaccord: 6, filtre: 6000, filtreBas: 2500, voyelle: 'a', vibrato: 0.05, attaque: 0.01, soutien: 0.85, drive: 1.3, vol: 0.4, verb: 0.2 },
+    orgue: { classe: 'Orgue', vol: 0.3, verb: 0.25 },
+    guitare_sat: { classe: 'Corde', clarte: 0.85, tenue: 3, drive: 6, cab: 3000, etouffe: 0.08, vol: 0.3, verb: 0.2 },
+    guitare_etouffee: { classe: 'Corde', clarte: 0.5, tenue: 0.35, drive: 6, cab: 2400, etouffe: 0.03, vol: 0.3, verb: 0.1 },
     kick: { classe: 'Kick', vol: 0.8, verb: 0.03, ancre: true },
     kick_electro: { classe: 'Kick', f0: 150, f1: 45, tenue: 0.35, vol: 0.8, verb: 0, ancre: true },
     caisse: { classe: 'Caisse', vol: 0.55, verb: 0.15 },

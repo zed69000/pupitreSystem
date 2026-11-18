@@ -1,6 +1,12 @@
 # Journal
 
 
+## 1.3.0 — Synthés, orgue, guitare saturée
+- Classe `Synthe` (scie, carré, triangle ; voix désaccordées étalées, sous-oscillateur, filtre à enveloppe, saturation ; option `voyelle` à deux formants) et ses préréglages `synth_basse`, `synth_lead`, `synth_pluck`, `supersaw`, `synth_cuivres`, `chip`, `talkbox`.
+- Classe `Orgue` (tirettes, percussion, cabine tournante), préréglage `orgue`.
+- Corde pincée saturée (`drive`, `cab`) : `guitare_sat`, `guitare_etouffee`.
+- Testés par `tests/instruments.test.mjs` (son, valeurs finies, pic sous 1).
+
 ## 1.2.0 — Notes du joueur, harmonie, mémoire
 - **Notes du joueur** : un instrument `joueur: true` ne garde dans la musique fabriquée que ses notes sans étiquette ; ses notes étiquetées sont fabriquées une par une (même timbre, même salle, queue courte) et jouées par `pupitre.jouerNote(n)` quand le joueur les réussit : à leur heure exacte si le geste est en avance, tout de suite s'il est en retard. Une note ratée manque à la musique. `beatmap()` indique `joueur` et la clé de la note. Test : `tests/joueur.test.mjs`.
 - **Harmonie** : une partition peut donner `harmonie` (accord de chaque mesure) et `gamme` ; le jeu s'en sert pour accorder ses voix. `tests/beatsplash.test.mjs` refuse toute note tenue hors de l'accord, et sur un temps fort toute note hors du mode ou un demi-ton au-dessus de l'accord (sauf étiquette « ! » : dissonance assumée).
