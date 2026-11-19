@@ -293,6 +293,8 @@ const STYLE = `
 .pup-vu i{display:block;height:100%;width:100%;transform-origin:0 50%;transform:scaleX(0);background:var(--pok);border-radius:99px}
 .pup-vu i.haut{background:var(--pko)}
 .pup-n{color:var(--pe2);font-size:13.5px;margin:0}
+.pup-nom{flex:1 1 140px;min-width:0;min-height:40px;font:500 15px/1 inherit;color:var(--pe);background:var(--pc);border:1.5px solid var(--pt);border-radius:12px;padding:0 12px}
+.pup form[hidden]{display:none}
 .pup details>summary{cursor:pointer;font-weight:600;min-height:40px;display:flex;align-items:center;gap:8px}
 .pup details>summary::-webkit-details-marker{display:none}
 .pup details>summary::before{content:"";width:0;height:0;border-left:7px solid currentColor;border-top:5px solid transparent;border-bottom:5px solid transparent;flex:none}
@@ -325,9 +327,13 @@ Regie.prototype.panneau = function (hote, o = {}) {
     for (const [k, n] of [['auto', 'Automatique'], ['rock', 'Rock'], ['pop', 'Pop'], ['electro', 'Électro'], ['orchestre', 'Orchestre'], ['acoustique', 'Acoustique'], ['neutre', 'Neutre']]) { const op = el('option', '', n); op.value = k; sel.append(op); }
     for (const n of R.profilsPerso()) { const op = el('option', '', '★ ' + n); op.value = '★' + n; sel.append(op); }
     sel.value = E.profil; sel.addEventListener('change', () => { if (sel.value[0] === '★') R.relire(sel.value.slice(1)); else R.profil(sel.value); R.sauver(); });
-    const garder = el('button', '', 'Garder…'); garder.type = 'button'; garder.addEventListener('click', () => { const n = (o.demander || (q => hote.ownerDocument.defaultView.prompt(q)))('Nom de ce réglage ?'); if (n) { R.sauver(String(n).slice(0, 24)); dessiner(); } });
+    // « Garder » ouvre un champ dans le panneau (pas de boîte de dialogue du navigateur : elles sont bloquées dans une WebView ou une page intégrée)
+    const garder = el('button', '', 'Garder…'), nomL = el('form', 'pup-l'), nomI = el('input'), nomOk = el('button', '', 'Enregistrer'); garder.type = 'button'; nomL.hidden = true;
+    nomI.type = 'text'; nomI.maxLength = 24; nomI.placeholder = 'Nom de ce réglage'; nomI.setAttribute('aria-label', 'Nom de ce réglage'); nomI.className = 'pup-nom'; nomL.append(nomI, nomOk);
+    garder.addEventListener('click', () => { nomL.hidden = !nomL.hidden; if (!nomL.hidden) nomI.focus(); });
+    nomL.addEventListener('submit', ev => { ev.preventDefault(); const n = nomI.value.trim(); if (n) { R.sauver(n); dessiner(); } });
     const raz = el('button', '', 'Remettre à zéro'); raz.type = 'button'; raz.addEventListener('click', () => { R.reinitialiser(); R.sauver(); });
-    l1.append(sel, garder, raz); g.append(l1);
+    l1.append(sel, garder, raz); g.append(l1, nomL);
     if (E.profil === 'auto' && R.auto) g.append(el('p', 'pup-n', 'Automatique : profil ' + PROFILS[R.auto.profil].nom + ' (' + R.auto.raison + ').'));
     act.append(el('span', 'pup-s', 'Activité'), vu('*'), lim); vus['lim'] = lim; g.append(act);
     g.append(curseur(GENERAL, 'vol', () => E.general.vol, v => R.reglerGeneral('vol', v)));
