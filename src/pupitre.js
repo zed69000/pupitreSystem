@@ -353,13 +353,20 @@ function NOYAU() {
   const FORMANTS = { a: [800, 1200], o: [500, 900], ou: [350, 800], e: [450, 1900], i: [300, 2300] };
   class Synthe extends Voix {
     constructor(I, e, sr, idx) {
-      super(I, e, sr, idx); const v = e.vel, f = this.f, R0 = rng(idx * 7919 + 3);
+      super(I, e, sr, idx); const v = e.vel, f = this.f, R0 = rng(idx * 7919 + 3), o = e.o || {};
+      // outils de musique électronique, tous facultatifs :
+      //  glissé (o.de = note de départ, en midi) : la hauteur rejoint la note en « glisse » secondes (basse acide, 808, sirène)
+      //  clarté (o.clarte) : ouvre ou ferme le filtre de cette note sans toucher à son volume (un arpège dont le filtre s'ouvre sur 8 mesures)
+      //  ondulation (ondule, en Hz) : le filtre s'ouvre et se referme en rythme (basse « wobble »)
+      this.gd0 = o.de != null ? (o.de - e.midi) / 12 : 0; this.gt = Math.max(0.005, o.glisse ?? I.glisse ?? 0.06);
+      this.wf = o.ondule ?? I.ondule ?? 0; this.wp = clamp(o.onduleProf ?? I.onduleProf ?? 0.6, 0, 1) * 4;
+      const cl = (o.clarte ?? 1) * (I.clarte ?? 1);
       this.env = new Env(sr, I.attaque ?? 0.005, I.chute ?? 0.3, I.soutien ?? 0.6, I.relache ?? 0.08, this.off);
       const n = Math.max(1, I.voix ?? 1), det = I.desaccord ?? 0; this.n = n; this.dt = new Float64Array(n); this.p = new Float64Array(n); this.pan = new Float32Array(n);
       for (let k = 0; k < n; k++) { const u = n === 1 ? 0 : k / (n - 1) * 2 - 1; this.dt[k] = f * Math.pow(2, u * det / 1200) / sr; this.p[k] = R0(); this.pan[k] = u; }
       this.onde = I.onde || 'scie'; this.pw = I.largeur ?? 0.5; this.sub = I.sub ?? 0; this.ps = 0; this.dts = f / 2 / sr;
       this.fl = new SVF(); this.fr = new SVF();
-      this.fc0 = clamp(f * (I.suit ?? 1) + (I.filtre ?? 2500) * (0.4 + 0.6 * v), 60, 16000); this.fc1 = clamp(f * (I.suit ?? 1) + (I.filtreBas ?? 300), 40, 16000);
+      this.fc0 = clamp(f * (I.suit ?? 1) + (I.filtre ?? 2500) * (0.4 + 0.6 * v) * cl, 60, 16000); this.fc1 = clamp(f * (I.suit ?? 1) + (I.filtreBas ?? 300) * cl, 40, 16000);
       this.ft = I.balayage ?? 0.15; this.q = I.q ?? 0.9; this.drive = I.drive ?? 1;
       this.vr = (5.2 + R0() * 0.5) / sr; this.vp = 0; this.vd = (I.vibrato ?? 0) * 0.0578; this.va = I.vibratoApres ?? 0.3;
       const F = I.voyelle && FORMANTS[I.voyelle]; if (F) { this.f1 = new SVF().set(sr, F[0], 5); this.f2 = new SVF().set(sr, F[1], 7); this.f3 = new SVF().set(sr, F[0], 5); this.f4 = new SVF().set(sr, F[1], 7); }
@@ -369,15 +376,17 @@ function NOYAU() {
       const q = this.p[k]; let s;
       if (this.onde === 'carre') s = (q < this.pw ? 1 : -1) + blep(q, d) - blep((q - this.pw + 1) % 1, d);
       else if (this.onde === 'triangle') s = 4 * Math.abs(q - 0.5) - 1;
+      else if (this.onde === 'sinus') s = sn(q);
       else s = 2 * q - 1 - blep(q, d);
       this.p[k] = q + d >= 1 ? q + d - 1 : q + d; return s;
     }
     render(L, R, S, a, b) {
-      const sr = this.sr, E = this.env, t = E.n / sr, fc = this.fc1 + (this.fc0 - this.fc1) * Math.exp(-t / this.ft);
+      const sr = this.sr, E = this.env, t = E.n / sr; let fc = this.fc1 + (this.fc0 - this.fc1) * Math.exp(-t / this.ft);
+      if (this.wf) fc = Math.max(70, fc * Math.pow(2, -this.wp * (0.5 + 0.5 * Math.cos(2 * Math.PI * this.wf * t))));      // fermé à l'attaque, ouvert à la demi-période
       this.fl.set(sr, fc, this.q); this.fr.set(sr, fc * 1.01, this.q);
-      const va = this.vd * clamp((t - this.va) / 0.4, 0, 1), n = this.n, g = this.gn;
+      const va = this.vd * clamp((t - this.va) / 0.4, 0, 1), n = this.n, g = this.gn, gl = this.gd0 ? Math.pow(2, this.gd0 * Math.exp(-t / this.gt)) : 1;
       for (let i = a; i < b; i++) {
-        const e = E.next(), m = 1 + va * sn(this.vp); this.vp += this.vr; if (this.vp >= 1) this.vp -= 1;
+        const e = E.next(), m = (1 + va * sn(this.vp)) * gl; this.vp += this.vr; if (this.vp >= 1) this.vp -= 1;
         let l = 0, r = 0; for (let k = 0; k < n; k++) { const s = this._osc(k, this.dt[k] * m), pk = this.pan[k]; l += s * (1 - pk * 0.6); r += s * (1 + pk * 0.6); }
         if (this.sub) { const d = this.dts * m, q = this.ps, s = (q < 0.5 ? 1 : -1) * this.sub; this.ps = q + d >= 1 ? q + d - 1 : q + d; l += s; r += s; }
         let xl = this.fl.lp(l * g), xr = this.fr.lp(r * g);
@@ -386,6 +395,28 @@ function NOYAU() {
         L[i] += xl * this.gl; R[i] += xr * this.gr; S[i] += (xl + xr) * 0.5 * this.gs;
       }
       return !E.fini();
+    }
+  }
+
+  // Souffle : du bruit dans un filtre passe-bande dont la fréquence voyage de f0 à f1 sur la durée de la note.
+  // forme 'monte' : le volume grandit jusqu'à la fin de la note puis se coupe net (la montée avant un drop) ;
+  // forme 'descend' : coup franc qui retombe (l'impact sur le premier temps du drop).
+  class Souffle extends Voix {
+    constructor(I, e, sr, idx) {
+      super(I, e, sr, idx); this.n = 0; this.f0 = I.f0 ?? 300; this.f1 = I.f1 ?? 9000; this.q = I.q ?? 1.2; this.monte = (I.forme || 'monte') === 'monte';
+      this.fl = new SVF(); this.fr = new SVF(); this.b2 = new Bruit(Math.imul(idx + 7, 40503) ^ 0x5bd1e995); this.rel = dec(this.monte ? 0.02 : 0.2, sr); this.r = 1;
+    }
+    render(L, R, S, a, b) {
+      const sr = this.sr, x = Math.min(1, this.n / this.off), fc = this.f0 * Math.pow(this.f1 / this.f0, x);
+      this.fl.set(sr, fc, this.q); this.fr.set(sr, fc * 1.03, this.q);
+      for (let i = a; i < b; i++) {
+        const u = this.n / this.off; this.n++;
+        let e = this.monte ? (u < 1 ? u * u : 1) : Math.exp(-4 * u) * Math.min(1, this.n / (0.002 * sr));
+        if (u >= 1 || this.gd < 1) { this.r *= this.gd < 1 ? this.gd : this.rel; e *= this.r; }
+        const l = this.fl.bp(this.bz.n()) * e * 2.2, r = this.fr.bp(this.b2.n()) * e * 2.2;
+        L[i] += l * this.gl; R[i] += r * this.gr; S[i] += (l + r) * 0.5 * this.gs;
+      }
+      return this.r > 1e-4 && !(!this.monte && this.n > this.off * 2.2);
     }
   }
 
@@ -627,9 +658,9 @@ function NOYAU() {
     batterie: 'kick kick_electro caisse caisse_militaire rim charley charley_ouvert crash ride clap shaker tom timbales grosse_caisse',
     basse: 'basse contrebasse_pizz synth_basse', guitares: 'guitare guitare_sat guitare_etouffee', pianos: 'piano rhodes orgue',
     cordes: 'violons altos violoncelles contrebasses cordes_stacc pizz harpe', cuivres: 'cors trompettes trombones cuivres_stab',
-    synthes: 'nappe synth_lead synth_pluck supersaw synth_cuivres chip talkbox' })) l.split(' ').forEach(t => { FAMILLES[t] = f; });
+    synthes: 'nappe synth_lead synth_pluck supersaw synth_cuivres chip talkbox montee retombee' })) l.split(' ').forEach(t => { FAMILLES[t] = f; });
 
-  const CLASSES = { Echantillon, Synthe, Orgue, Rhodes, Piano, Basse, Corde, Cordes, Cuivres, Bois, Cloche, Choeur, Nappe, Kick, Caisse, Metal, Clap, Tom, Timbale, GrosseCaisse, Shaker, Rim };
+  const CLASSES = { Echantillon, Souffle, Synthe, Orgue, Rhodes, Piano, Basse, Corde, Cordes, Cuivres, Bois, Cloche, Choeur, Nappe, Kick, Caisse, Metal, Clap, Tom, Timbale, GrosseCaisse, Shaker, Rim };
 
   // ─── Réverbe (Freeverb) : une par rendu, alimentée par les envois des voix ─────
   function reverbe(S, L, R, n, sr, o) {
@@ -683,6 +714,8 @@ function NOYAU() {
     cloches_tubes: { classe: 'Cloche', modes: [[0.5, 0.5, 3], [1, 1, 2.5], [1.19, 0.4, 1.8], [1.71, 0.35, 1.2], [2, 0.3, 1], [2.74, 0.2, 0.6], [3, 0.15, 0.5]], vol: 0.3, verb: 0.4 },
     choeur: { classe: 'Choeur', voyelle: 'a', vol: 0.4, verb: 0.45, etale: 0.6 },
     nappe: { classe: 'Nappe', vol: 0.3, verb: 0.4 },
+    montee: { classe: 'Souffle', forme: 'monte', f0: 300, f1: 9000, q: 1.2, vol: 0.2, verb: 0.3 },
+    retombee: { classe: 'Souffle', forme: 'descend', f0: 9000, f1: 250, q: 0.9, vol: 0.25, verb: 0.4 },
     synth_basse: { classe: 'Synthe', onde: 'scie', sub: 0.6, filtre: 1400, filtreBas: 140, balayage: 0.12, q: 1.4, drive: 1.6, chute: 0.4, soutien: 0.55, relache: 0.04, vol: 0.5, verb: 0.02 },
     synth_lead: { classe: 'Synthe', onde: 'scie', voix: 2, desaccord: 8, filtre: 5000, filtreBas: 1800, balayage: 0.4, vibrato: 0.08, vibratoApres: 0.25, chute: 0.6, soutien: 0.8, vol: 0.3, verb: 0.3 },
     synth_pluck: { classe: 'Synthe', onde: 'carre', largeur: 0.35, voix: 2, desaccord: 6, filtre: 4500, filtreBas: 200, balayage: 0.08, q: 1.2, chute: 0.25, soutien: 0, relache: 0.15, vol: 0.3, verb: 0.3 },
@@ -743,13 +776,13 @@ function NOYAU() {
     const swing = S.swing ?? P.swing ?? 0.5, unit = (S.swingSur || P.swingSur || 16) === 8 ? 2 : 1, hum = (S.humain ?? P.humain ?? 0) / 1000;
     const R = rng(hashStr(nom) ^ (P.graine || 1)), out = [];
     S.notes.forEach((n, i) => {
-      const [instr, mes, pas, midi, dur, vel = 0.8, tag] = n, I = INS[instr];
+      const [instr, mes, pas, midi, dur, vel = 0.8, tag, opt] = n, I = INS[instr];      // opt : réglages de CETTE note (glissé, clarté, ondulation)
       const r1 = R() - 0.5, r2 = R() - 0.5; if (!I) return;
       let p = mes * X.ppm + pas; const q = p / unit;
       if (Math.abs(q - Math.round(q)) < 1e-6 && Math.round(q) % 2 === 1) p += (swing - 0.5) * 2 * unit;
       let t = p * s16 + (I.retard || 0) / 1000; const h = I.humain === false ? 0 : hum;
       if (h && !(I.ancre && Math.abs(pas % 4) < 1e-6)) t += r1 * 2 * h;
-      out.push({ i, instr, t: Math.max(0, t), dur: Math.max(0.005, dur * s16), midi: midi || 60, vel: clamp(vel * (1 + (h ? r2 * 0.16 : 0)), 0.01, 1), mes, pas, tag });
+      out.push({ i, instr, t: Math.max(0, t), dur: Math.max(0.005, dur * s16), midi: midi || 60, vel: clamp(vel * (1 + (h ? r2 * 0.16 : 0)), 0.01, 1), mes, pas, tag, o: opt || null });
     });
     return { evts: out, duree: X.duree, info: X };
   }
@@ -768,12 +801,14 @@ function NOYAU() {
     const salle = Object.assign({ taille: 0.8, amorti: 0.35, niveau: 1, predelai: 0.02, largeur: 1 }, P.salle);
     const N = Math.ceil((fin + (P.queue ?? (1.5 + salle.taille * 3))) * sr);
     const L = new Float32Array(N), R = new Float32Array(N), S = new Float32Array(N);
+    // pompe : les instruments marqués `pompe: true` sont fabriqués à part, puis creusés à chaque kick du morceau (réglage : partition.pompage)
+    const pompe = evts.some(e => INS[e.instr].pompe), Lp = pompe ? new Float32Array(N) : null, Rp = pompe ? new Float32Array(N) : null, Sp = pompe ? new Float32Array(N) : null;
     const actives = [], parInstr = {}, B = 32; let k = 0, voixMax = 0;
     for (let b = 0; b < N; b += B) {
       const end = Math.min(N, b + B);
       while (k < evts.length) {
         const e = evts[k], s0 = Math.round(e.t * sr); if (s0 >= end) break; k++;
-        const I = INS[e.instr], v = new CLASSES[I.classe](I, e, sr, e.i + 1); v.debut = Math.max(b, s0); v.instr = e.instr;
+        const I = INS[e.instr], v = new CLASSES[I.classe](I, e, sr, e.i + 1); v.debut = Math.max(b, s0); v.instr = e.instr; v.pompe = !!I.pompe;
         if (I.choke) for (const o of actives) if (o.I.choke === I.choke) o.couper();
         if (v.excl) for (const o of actives) if (o.excl === v.excl && o.I.ech === I.ech) o.couper();      // charley ouvert coupé par le fermé (classe exclusive de la banque)
         const l = parInstr[e.instr] || (parInstr[e.instr] = []); l.push(v); if (l.length > (I.poly ?? 24)) l.shift().couper();
@@ -782,10 +817,21 @@ function NOYAU() {
       }
       for (let j = actives.length - 1; j >= 0; j--) {
         const v = actives[j];
-        if (!v.render(L, R, S, Math.max(b, v.debut), end)) { actives.splice(j, 1); const l = parInstr[v.instr], x = l.indexOf(v); if (x >= 0) l.splice(x, 1); }
+        if (!(v.pompe ? v.render(Lp, Rp, Sp, Math.max(b, v.debut), end) : v.render(L, R, S, Math.max(b, v.debut), end))) { actives.splice(j, 1); const l = parInstr[v.instr], x = l.indexOf(v); if (x >= 0) l.splice(x, 1); }
       }
       if (actives.length > voixMax) voixMax = actives.length;
       if (k >= evts.length && actives.length === 0 && b > fin * sr) break;
+    }
+    if (pompe) {
+      // la courbe : tout en bas sur le kick (rampe de 4 ms pour ne pas claquer), retour progressif sur `duree` secondes
+      const C = Object.assign({ profondeur: 0.65, duree: 0.24 }, P.pompage), sur = C.sur || null, G = new Float32Array(N).fill(1), bas = 1 - clamp(C.profondeur, 0, 1);
+      const kicks = E.evts.filter(e => (sur ? sur.includes(e.instr) : INS[e.instr].ancre) && e.vel > 0.3).map(e => Math.round(e.t * sr)).sort((x, y) => x - y);
+      const nd = Math.max(8, Math.round(C.duree * sr)), nr = Math.round(0.004 * sr);
+      for (const s0 of kicks) {
+        for (let i = Math.max(0, s0 - nr); i < s0 && i < N; i++) { const g = 1 - (1 - bas) * (1 - (s0 - i) / nr); if (g < G[i]) G[i] = g; }
+        for (let i = 0; i < nd && s0 + i < N; i++) { const x = i / nd; G[s0 + i] = bas + (1 - bas) * x * x; }
+      }
+      for (let i = 0; i < N; i++) { const g = G[i]; L[i] += Lp[i] * g; R[i] += Rp[i] * g; S[i] += Sp[i] * g; }
     }
     if (salle.niveau > 0) reverbe(S, L, R, N, sr, salle);
     const min = Math.ceil(E.duree * sr); let last = N - 1;

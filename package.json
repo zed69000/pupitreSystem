@@ -1,6 +1,6 @@
 {
   "name": "pupitre",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "Moteur de musique des jeux de Seb : synthèse et vrais instruments en Web Workers, console de mixage, lecture calée sur l'horloge audio, beatmap tirée de la partition.",
   "type": "module",
   "main": "src/pupitre.js",

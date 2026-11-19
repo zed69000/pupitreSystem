@@ -1,5 +1,13 @@
 # Journal
 
+## 1.6.0 — Outils de musique électronique
+- **Pompe sur le kick** (`partition.pompage`, instruments marqués `pompe: true`) : la basse, les nappes et les accords s'effacent à chaque kick puis reviennent. C'est le mouvement de la house et de la trance. Les instruments non marqués ne bougent pas.
+- **Options par note** (8e case : `{ de, glisse, clarte, ondule, onduleProf }`) pour les synthés : glissé depuis une autre note (basse acide, 808), filtre plus ou moins ouvert sans toucher au volume (un arpège qui s'ouvre sur 8 mesures), filtre qui ondule à une vitesse donnée (basse wobble).
+- **Souffles** : `montee` (bruit qui grimpe et se coupe net avant un drop) et `retombee` (impact).
+- Onde `sinus` pour les synthés (sous-basse).
+- Sans ces réglages, le rendu est identique au bit près ; la beatmap les ignore. 7 tests de plus.
+- Sept partitions d'exemple par familles : house, techno, trance, electro-funk, dubstep, happy hardcore, chill-out (`exemples/beatsplash/club.js`, `club-2.js`).
+
 ## 1.5.0 — Vrais instruments, console de mixage
 - **Vrais instruments** (`src/pupitre-banques.js`) : une banque SoundFont 2 (.sf2) remplace les timbres synthétiques par des notes enregistrées, avec couches de vélocité, boucles, enveloppes et coupure des charleys. La partition ne change pas ; sans banque, ou pour un instrument absent, le synthé joue. La beatmap est identique dans les deux cas.
 - Banque téléchargée une fois (progression suivie), gardée sur l'appareil ; seuls les instruments du morceau sont préparés. `scripts/decouper-banque.mjs` découpe une banque en un fichier par instrument.

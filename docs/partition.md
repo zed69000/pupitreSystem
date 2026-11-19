@@ -69,6 +69,24 @@ partition
 | Batterie | `kick`, `kick_electro`, `caisse`, `rim`, `charley`, `charley_ouvert`, `crash`, `ride`, `clap`, `shaker`, `tom` | `f0`, `f1`, `tenue`, `ton`, `timbre`, `bruit`, `fc`, `hp`, `base` |
 | Orchestre | `timbales`, `grosse_caisse`, `caisse_militaire` | `tenue` |
 
+## Outils de musique électronique
+
+```
+kick ──────────────► ▌   ▌   ▌   ▌            chaque kick…
+basse, nappe, accords ▁▂▅█▁▂▅█▁▂▅█▁▂▅█         …creuse les instruments marqués `pompe: true`, qui reviennent ensuite
+```
+
+| Outil | Écriture | Pourquoi |
+|---|---|---|
+| Pompe | `pompage: { profondeur: 0.65, duree: 0.24, sur: ['kick'] }` dans la partition, `pompe: true` sur l'instrument | Le kick garde sa place et le morceau respire avec lui. Sans `sur`, tous les instruments `ancre` (les kicks) déclenchent. |
+| Glissé | `['bs', 0, 14, 45, 2, 0.8, null, { de: 57, glisse: 0.05 }]` | La note part de `de` et arrive juste : basse acide, 808, sirène. |
+| Clarté | `{ clarte: 0.2 }` sur la note, de 0,1 (fermé) à 2 (grand ouvert) | Ouvrir le filtre d'un arpège au fil des mesures sans changer son volume : la montée d'une intro. |
+| Ondulation | `ondule: 4.67` (Hz) et `onduleProf` sur l'instrument, ou `{ ondule: 9.33 }` sur une note | La basse « wobble » : le filtre s'ouvre et se referme en rythme. À 140 BPM, 2,33 Hz = une noire, 4,67 = une croche, 7 = un triolet, 9,33 = une double. |
+| Souffles | instruments `montee` et `retombee` (`f0`, `f1`, `q`) ; la durée de la note fait la durée du souffle | La montée avant un drop, l'impact sur son premier temps. |
+| Onde sinus | `onde: 'sinus'` sur un synthé | Une sous-basse pure. |
+
+Ces options ne changent ni les temps ni la beatmap. Sur les notes du joueur (jouées à part), les options de note ne s'appliquent pas.
+
 ## Vrais instruments
 
 Avec une banque de sons chargée (voir [regie.md](regie.md)), les mêmes types sont joués par des notes enregistrées. Clés propres : `reel: false` (garder le synthé), `synthe: 0.3` (doublure synthétique), `type: 'ech', prog: 40, secours: 'violons'` (programme General MIDI précis), `dynamique`, `desaccord`, `entier`, `largeur`. `famille` range l'instrument dans une autre piste de la console.
