@@ -105,7 +105,7 @@
        motifs: {intro, A, B, pause, final} une liste de mesures [[pas, durée, note de l'accord ou {n: midi}, geste, options]] jouée par « lead »
        extra(add, sec, m, c, cn, n)       tout le reste (arpèges, effets)
      cfg : bpm, swing, graine, cle, salle, pompage, final (transposition du final), prog: {intro, A, montee, B, pause, fin},
-       lead, leadBase, leadOctave, roule (instrument du roulement), grave (instrument de basse de la fin), instruments, gestes, frappe, integre */
+       lead, leadBase, leadOctave, roule (instrument du roulement), grave (instrument de basse de la fin), instruments, gestes, frappe, integre, coupee */
   function club(cfg){
     const {N, add} = cahier(), H = {}, k = cfg.final || 0, tr = (noms, kk) => noms.map(n => acc(n, kk || 0));
     const jouer = (sec, m, c, cn, n, cl, kk, liste, fort) => {
@@ -140,9 +140,14 @@
     // Le coup de frappe part à l'instant du geste : c'est lui qui donne la sensation de jouer. Pour un morceau « intégré », il est choisi dans le
     // morceau (un tom grave accordé sur la tonalité, pas un claquement aigu) et le tic aigu des « parfait » est retiré. frappe: false = aucun coup.
     if(cfg.integre) P.integre = true;
+    if(cfg.coupee) P.coupee = true;      // piste coupée : la partie du joueur joue dans la musique tant qu'il enchaîne, se tait s'il rate (voir game.js)
     if(cfg.frappe === false){ P.frappe = {}; return P; }
     return frappes(P, cfg.frappe);
   }
-  window.K7M = {echo, club, hookAuto, batt, chanson, frappes, ROOT, acc, gamme, cahier, proche, ton, voix, motif, charley, harmonie, MODES};
+  // Coups de frappe pris dans le morceau : toms accordés sur la tonique (entre 200 et 450 Hz : graves, mais audibles sur un téléphone, qui ne
+  // restitue presque rien sous 150 Hz) et kick court saturé. Rien d'aigu. « tonique » est une note midi entre 55 et 67.
+  function frappesGraves(tonique){ const tom = (d, v) => ({instr: {type: 'tom', vol: v || .4, verb: .12}, midi: tonique + d, dur: 1.5});
+    return {C: tom(0), G: tom(3), D: tom(7), H: Object.assign(tom(-5, .34), {dur: 2}), J: {instr: {type: 'kick_electro', vol: .38, f0: 210, f1: 72, tenue: .12, drive: 3, clic: .3}}}; }
+  window.K7M = {frappesGraves, echo, club, hookAuto, batt, chanson, frappes, ROOT, acc, gamme, cahier, proche, ton, voix, motif, charley, harmonie, MODES};
   window.K7PARTITIONS = window.K7PARTITIONS || {};
 })();

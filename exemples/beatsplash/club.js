@@ -5,6 +5,7 @@
    « Piscine de nuit » — HOUSE filtrée (French touch), 124 BPM, do mineur, swing 54 %.
      Émotion : chaud et dansant, 7/10. Signature : la boucle d'accords dont le filtre s'ouvre pendant l'intro, puis le piano house au drop.
      Kick sur chaque temps, charley ouvert à contretemps, basse qui rebondit à l'octave, tout pompe sur le kick.
+     Piste coupée (comme Tunnel, Lever de soleil et Robot funk) : le piano et le clap jouent dans la musique tant que tu enchaînes.
      Harmonie Cm9 · Cm9 · Abmaj7 · Bb9 ; drop Abmaj7 · Bb9 · Gm7 · Cm9. Tu joues le piano et le clap.
 
    « Tunnel » — TECHNO mélodique, 130 BPM, ré mineur, droit.
@@ -12,8 +13,8 @@
      et ne retombe sur ses pieds que toutes les 3 mesures), et l'accord qui revient en écho.
      Basse qui roule entre les kicks, peu d'accords (Dm9 longtemps, puis Bbmaj7 · C9).
      Les briques font partie de la musique : tu joues le riff (un synthé pincé, dans le médium grave, sous l'arpège) et le clap
-     du morceau. Chaque geste donne aussi un coup immédiat, pris dans le morceau : un tom accordé en ré pour couper,
-     un coup de kick court pour taper. Rien d'aigu : le coup répond au doigt, la note tombe sur le temps.
+     du morceau, en « piste coupée » : ils jouent dans la musique tant que tu enchaînes, et se taisent si tu rates.
+     Chaque geste donne aussi un coup immédiat, pris dans le morceau : un tom accordé en ré pour couper, un kick court pour taper.
 
    « Lever de soleil » — TRANCE, 138 BPM, fa dièse mineur, final un ton plus haut.
      Émotion : euphorique, bras levés, 9/10 au drop. Signature : l'hymne en 3-3-2 au-dessus de la nappe hachée, et la pause au piano.
@@ -32,7 +33,7 @@
   window.K7PARTITIONS.lab_house = function(){
     const boucle = ['C:m9', 'C:m9', 'Ab:maj7', 'Bb:9', 'C:m9', 'C:m9', 'Ab:maj7', 'Bb:9'];
     return M.club({
-      bpm: 124, swing: .54, graine: 124, cle: ['C', 'eolien'], pompage: {profondeur: .6, duree: .22}, salle: {taille: .5, amorti: .55, niveau: .45, predelai: .02},
+      bpm: 124, swing: .54, graine: 124, integre: true, coupee: true, frappe: M.frappesGraves(60), cle: ['C', 'eolien'], pompage: {profondeur: .6, duree: .22}, salle: {taille: .5, amorti: .55, niveau: .45, predelai: .02},
       prog: {intro: boucle, A: boucle, montee: ['Ab:maj7', 'Ab:maj7', 'Bb:9', 'G:7s9'], B: ['Ab:maj7', 'Bb:9', 'G:m7', 'C:m9', 'Ab:maj7', 'Bb:9', 'C:m9', 'C:m9'],
         pause: ['F:m9', 'F:m9', 'Eb:maj9', 'Eb:maj9', 'Ab:maj7', 'Ab:maj7', 'G:7sus4', 'G:7'], fin: ['C:m9', 'C:m9']},
       groove: (add, sec, m, c, cn, n) => {
@@ -52,7 +53,7 @@
       },
       // au drop, le piano plaque ses accords sous la mélodie (le son de la house de Chicago)
       extra: (add, sec, m, c, cn, n) => { if(n >= 2) [[0, .6], [3, .45], [6, .5], [10, .55]].forEach(([p, v]) => plaque(add, sec, 'pnc', m, p, c, 60, 2, v)); },
-      lead: 'pn', leadBase: 72, leadOctave: 'ss',
+      lead: 'pn', leadBase: 55, leadOctave: 'ss',
       motifs: {
         intro: [[], [], [], [], [[8, 4, 2, 'C1']], [[8, 4, 3, 'C1']], [[8, 4, 2, 'C1']], [[4, 2, 3, 'C1'], [8, 4, 4, 'C1']]],
         A: [[[0, 2, 2, 'C1'], [3, 2, 3, 'C2'], [6, 4, 4, 'C1']], [[2, 2, 3, 'C2'], [6, 2, 2, 'C3'], [10, 4, 1, 'C1']]],
@@ -72,11 +73,8 @@
   window.K7PARTITIONS.lab_tunnel = function(){
     const boucle = ['D:m9', 'D:m9', 'D:m9', 'D:m9', 'Bb:maj7', 'Bb:maj7', 'G:m9', 'A:m7'], tour = [0, 2, 3, 1, 2, 4];
     return M.club({
-      bpm: 130, graine: 130, integre: true, cle: ['D', 'eolien'],
-      // coups de frappe : graves mais audibles sur un téléphone (qui ne restitue presque rien sous 150 Hz) : toms accordés sur ré entre 220 et 440 Hz,
-      // kick court et saturé pour que ses harmoniques passent
-      frappe: {C: {instr: {type: 'tom', vol: .4, verb: .12}, midi: 62, dur: 1.5}, G: {instr: {type: 'tom', vol: .4, verb: .12}, midi: 65, dur: 1.5}, H: {instr: {type: 'tom', vol: .34, verb: .2}, midi: 57, dur: 2},
-        J: {instr: {type: 'kick_electro', vol: .38, f0: 210, f1: 72, tenue: .12, drive: 3, clic: .3}}, D: {instr: {type: 'tom', vol: .4, verb: .12}, midi: 69, dur: 1.5}},
+      bpm: 130, graine: 130, integre: true, coupee: true, cle: ['D', 'eolien'],
+      frappe: M.frappesGraves(62),
       prog: {intro: boucle, A: boucle, montee: ['Bb:maj7', 'Bb:maj7', 'C:9', 'A:7sus4'], B: ['D:m9', 'D:m9', 'Bb:maj7', 'C:9', 'D:m9', 'D:m9', 'G:m9', 'A:m7'],
         pause: ['Bb:maj7', 'Bb:maj7', 'F:maj9', 'F:maj9', 'G:m9', 'G:m9', 'A:7sus4', 'A:7sus4'], fin: ['D:m9', 'D:m9']},
       groove: (add, sec, m, c, cn, n) => {
@@ -120,7 +118,7 @@
     const B = hymne.map((mes, i) => mes.map((n, j) => n == null ? null : [RY[j][0], i === 1 && j === 3 ? 4 : i === 1 && j === 4 ? 1.5 : i === 3 && j === 3 ? 6 : i === 3 && j === 5 ? 1.5 : i === 7 && j === 3 ? 8 : RY[j][1], {n}, C6[j]]).filter(Boolean));
     B[1][4][0] = 12;      // mesure 2 : la note de passage tombe sur le 4e temps
     return M.club({
-      bpm: 138, graine: 138, cle: ['F#', 'eolien'], final: 2, pompage: {profondeur: .65, duree: .2}, salle: {taille: .75, amorti: .4, niveau: .65, predelai: .03},
+      bpm: 138, graine: 138, integre: true, coupee: true, frappe: M.frappesGraves(66), cle: ['F#', 'eolien'], final: 2, pompage: {profondeur: .65, duree: .2}, salle: {taille: .75, amorti: .4, niveau: .65, predelai: .03},
       prog: {intro: boucle, A: boucle, montee: ['D:maj7', 'D:maj7', 'E:maj', 'E:maj'], B: ['F#:m', 'D:maj7', 'A:add9', 'E:maj', 'F#:m', 'D:maj7', 'A:add9', 'E:maj'],
         pause: ['D:maj7', 'E:maj', 'C#:m7', 'F#:m7', 'D:maj7', 'E:maj', 'F#:m', 'F#:m'], fin: ['F#:m', 'F#:m']},
       groove: (add, sec, m, c, cn, n) => {
@@ -137,7 +135,7 @@
         [...'x.xxx.xxx.xxx.xx'].forEach((ch, p) => { if(ch === 'x') plaque(add, sec, 'gate', m, p, c, 57, .8, p % 4 === 0 ? .6 : .42, {clarte: .15 + .85*cl}); });
         if(n >= 2) plaque(add, sec, 'pad', m, 0, c, 57, 16, .5);
       },
-      lead: 'ld', leadBase: 73, leadOctave: 'ss',
+      lead: 'ld', leadBase: 57, leadOctave: 'ss',
       motifs: {
         intro: [[], [], [], [], [[8, 6, 2, 'C1']], [[8, 6, 1, 'C1']], [[8, 6, 2, 'C1']], [[8, 3, 2, 'C1'], [11, 3, 1, 'C1']]],
         A: [[[0, 3, 2, 'C1'], [3, 3, 4, 'C2'], [8, 3, 2, 'C1'], [11, 3, 1, 'C2']], [[0, 3, 2, 'C1'], [3, 3, 3, 'C2'], [8, 6, 2, 'C1']]],
@@ -155,7 +153,7 @@
   window.K7PARTITIONS.lab_robotfunk = function(){
     const vamp = ['G:m9', 'G:m9', 'C:9', 'C:9'];
     return M.club({
-      bpm: 112, swing: .56, graine: 112, humain: 5, cle: ['G', 'dorien'], salle: {taille: .4, amorti: .6, niveau: .4, predelai: .015},
+      bpm: 112, swing: .56, graine: 112, humain: 5, integre: true, coupee: true, frappe: M.frappesGraves(55), cle: ['G', 'dorien'], salle: {taille: .4, amorti: .6, niveau: .4, predelai: .015},
       prog: {intro: vamp.concat(vamp), A: ['G:m9', 'G:m9', 'C:9', 'C:9', 'G:m9', 'G:m9', 'Eb:maj7', 'D:7s9'], montee: ['Eb:maj7', 'Eb:maj7', 'D:7sus4', 'D:7s9'],
         B: ['Eb:maj7', 'F:9', 'G:m9', 'G:m9', 'Eb:maj7', 'F:9', 'D:m7', 'D:7s9'], pause: ['C:m9', 'C:m9', 'G:m9', 'G:m9', 'Eb:maj7', 'Eb:maj7', 'D:7sus4', 'D:7'], fin: ['G:m9', 'G:m9']},
       groove: (add, sec, m, c, cn, n) => {
@@ -173,7 +171,7 @@
         if(n >= 1 || n < 0) plaque(add, sec, 'rh', m, 0, c, 55, n < 0 ? 14 : 7, .5);
         if(n >= 0) for(const [p, d] of n >= 2 ? [[0, 1], [3, 1], [7, 1], [10, 2], [13, 1]] : [[0, 1], [7, 1], [10, 2]]) plaque(add, sec, 'stab', m, p, c, 62, d, p === 10 ? .8 : .6, {clarte: .2 + .8*cl});
       },
-      lead: 'tb', leadBase: 67, leadOctave: 'tb8',
+      lead: 'tb', leadBase: 53, leadOctave: 'tb8',
       motifs: {
         intro: [[], [], [], [], [[10, 4, 2, 'C1']], [[10, 4, 1, 'C1']], [[10, 4, 2, 'C1']], [[6, 2, 1, 'C1'], [10, 4, 3, 'C1']]],
         A: [[[0, 2, 2, 'C1'], [3, 1, 3, 'C3'], [4, 2, 2, 'C2'], [7, 3, 1, 'C1']], [[2, 2, 1, 'C2'], [6, 2, 2, 'C1'], [10, 4, 3, 'C1']]],
