@@ -10,7 +10,9 @@
    « Tunnel » — TECHNO mélodique, 130 BPM, ré mineur, droit.
      Émotion : hypnotique, qui avance, 6/10 puis 8/10. Signature : l'arpège de 6 notes qui tourne sur une mesure de 16 (il se décale
      et ne retombe sur ses pieds que toutes les 3 mesures), et l'accord qui revient en écho.
-     Basse qui roule entre les kicks, peu d'accords (Dm9 longtemps, puis Bbmaj7 · C9). Tu joues le lead et le clap.
+     Basse qui roule entre les kicks, peu d'accords (Dm9 longtemps, puis Bbmaj7 · C9).
+     Les briques font partie de la musique : tu joues le riff (un synthé pincé, dans le médium grave, sous l'arpège) et le clap
+     du morceau. Aucun bruit de frappe n'est ajouté : si tu ne joues pas, il manque le riff et le clap, c'est tout.
 
    « Lever de soleil » — TRANCE, 138 BPM, fa dièse mineur, final un ton plus haut.
      Émotion : euphorique, bras levés, 9/10 au drop. Signature : l'hymne en 3-3-2 au-dessus de la nappe hachée, et la pause au piano.
@@ -69,7 +71,7 @@
   window.K7PARTITIONS.lab_tunnel = function(){
     const boucle = ['D:m9', 'D:m9', 'D:m9', 'D:m9', 'Bb:maj7', 'Bb:maj7', 'G:m9', 'A:m7'], tour = [0, 2, 3, 1, 2, 4];
     return M.club({
-      bpm: 130, graine: 130, cle: ['D', 'eolien'], pompage: {profondeur: .7, duree: .2}, salle: {taille: .7, amorti: .45, niveau: .55, predelai: .03},
+      bpm: 130, graine: 130, integre: true, cle: ['D', 'eolien'], pompage: {profondeur: .7, duree: .2}, salle: {taille: .7, amorti: .45, niveau: .55, predelai: .03},
       prog: {intro: boucle, A: boucle, montee: ['Bb:maj7', 'Bb:maj7', 'C:9', 'A:7sus4'], B: ['D:m9', 'D:m9', 'Bb:maj7', 'C:9', 'D:m9', 'D:m9', 'G:m9', 'A:m7'],
         pause: ['Bb:maj7', 'Bb:maj7', 'F:maj9', 'F:maj9', 'G:m9', 'G:m9', 'A:7sus4', 'A:7sus4'], fin: ['D:m9', 'D:m9']},
       groove: (add, sec, m, c, cn, n) => {
@@ -87,7 +89,7 @@
       // l'arpège de 6 notes sur une mesure de 16 : il glisse contre le temps, son filtre s'ouvre à l'intro et dans les montées
       extra: (add, sec, m, c, cn, n) => { const cl = sec === 'intro' ? .15 + .85*m/7 : sec === 'montee' ? .3 + .7*m/3 : n < 0 ? .35 : n === 0 ? .6 : 1;
         for(let p = 0; p < 16; p++){ const i = (m*16 + p) % 6; add(sec, ['arp', m, p, T(c, tour[i], 62), .8, (i % 3 === 0 ? .65 : .38)*(n < 0 ? .7 : 1), undefined, {clarte: cl}]); } },
-      lead: 'ld', leadBase: 74, leadOctave: 'ss',
+      lead: 'ld', leadBase: 45, leadOctave: 'ss',
       motifs: {
         intro: [[], [], [], [], [[12, 4, 2, 'C1']], [[12, 4, 3, 'C1']], [[12, 4, 2, 'C1']], [[6, 3, 3, 'C1'], [12, 4, 4, 'C1']]],
         A: [[[0, 3, 2, 'C1'], [6, 3, 3, 'C2'], [12, 3, 2, 'C2']], [[3, 3, 1, 'C1'], [9, 3, 2, 'C3'], [12, 4, 0, 'C1']]],
@@ -98,7 +100,7 @@
         hh: {type: 'charley', vol: .1, groupe: 'base'}, hho: {type: 'charley_ouvert', vol: .15, groupe: 'base'}, ride: {type: 'ride', vol: .07, groupe: 'transe'}, rim: {type: 'rim', vol: .12, pan: .3, groupe: 'base'},
         basse: {type: 'synth_basse', vol: .2, filtre: 700, filtreBas: 160, chute: .12, soutien: .2, relache: .03, pompe: true, groupe: 'base'},
         pad: {type: 'nappe', vol: .13, pompe: true, groupe: 'base'}, stab: {type: 'synth_cuivres', vol: .15, relache: .2, verb: .5, pompe: true, groupe: 'base'},
-        arp: {type: 'synth_pluck', vol: .15, pan: .25, verb: .35, pompe: true, groupe: 'base'}, ld: {type: 'synth_lead', vol: .25, filtre: 3500, vibrato: 0, joueur: true, groupe: 'base'},
+        arp: {type: 'synth_pluck', vol: .15, pan: .25, verb: .35, pompe: true, groupe: 'base'}, ld: {type: 'synth_lead', voix: 2, desaccord: 9, vol: .3, filtre: 2300, filtreBas: 450, balayage: .2, q: 1.5, relache: .14, vibrato: 0, verb: .3, joueur: true, groupe: 'base'},
         ss: {type: 'supersaw', vol: .05, pompe: true, groupe: 'transe'}},
     });
   };

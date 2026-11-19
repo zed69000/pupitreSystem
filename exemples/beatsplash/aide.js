@@ -105,7 +105,7 @@
        motifs: {intro, A, B, pause, final} une liste de mesures [[pas, durée, note de l'accord ou {n: midi}, geste, options]] jouée par « lead »
        extra(add, sec, m, c, cn, n)       tout le reste (arpèges, effets)
      cfg : bpm, swing, graine, cle, salle, pompage, final (transposition du final), prog: {intro, A, montee, B, pause, fin},
-       lead, leadBase, leadOctave, roule (instrument du roulement), grave (instrument de basse de la fin), instruments, gestes, frappe */
+       lead, leadBase, leadOctave, roule (instrument du roulement), grave (instrument de basse de la fin), instruments, gestes, frappe, integre */
   function club(cfg){
     const {N, add} = cahier(), H = {}, k = cfg.final || 0, tr = (noms, kk) => noms.map(n => acc(n, kk || 0));
     const jouer = (sec, m, c, cn, n, cl, kk, liste, fort) => {
@@ -135,6 +135,9 @@
       salle: cfg.salle || {taille: .55, amorti: .5, niveau: .5, predelai: .02}, instruments: ins, sections, forme: ['decompte', 'intro', 'A', 'montee', 'B', 'pause', 'montee', 'final', 'fin'],
       jeu: {decompte: null, intro: ['Intro', 0, g], A: ['Couplet', 1, g], montee: ['Montée', 1, g], B: ['Drop', 2, g], pause: ['Pause', 'rest', g], final: ['Final', 3, g], fin: ['Fin', 'rest', g]},
       harmonie: Object.fromEntries(Object.entries(H).map(([kk, v]) => [kk, harmonie(v)])), gamme: G0, gammes: {final: Gk, fin: Gk}};
+    // integre : aucun bruit de frappe ajouté par-dessus. Chaque brique joue SA note du morceau (retirée de la musique tant qu'on ne la joue pas),
+    // avec le son de l'instrument du morceau : ce que fait le joueur est une partie de la musique, pas un bruit à côté.
+    if(cfg.integre){ P.frappe = {}; P.integre = true; return P; }
     return frappes(P, cfg.frappe);
   }
   window.K7M = {echo, club, hookAuto, batt, chanson, frappes, ROOT, acc, gamme, cahier, proche, ton, voix, motif, charley, harmonie, MODES};
