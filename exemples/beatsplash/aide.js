@@ -92,6 +92,51 @@
   function hookAuto(noms, base, motifs){ const out = []; noms.forEach((n, m) => { const c = acc(n); motifs[m % motifs.length].forEach(([p, d, i, tag]) => out.push([m, p, ton(c, i, base), d, tag])); }); return out; }
   // batterie en texte : spec = {instr: 'motif de 16 pas', …} ; X accent, x normal, g fantôme ; tags = {instr: {pas: 'J1'}}
   function batt(add, sec, m, spec, tags){ for(const [ins, txt] of Object.entries(spec)) [...txt].forEach((ch, p) => { const v = {X: 1, x: .75, g: .2, o: .7}[ch]; if(v != null) add(sec, [ins, m, p, ins === 'kick' ? 36 : 0, ch === 'o' ? 2 : 1.5, v, tags && tags[ins] && tags[ins][p]]); }); }
-  window.K7M = {hookAuto, batt, chanson, frappes, ROOT, acc, gamme, cahier, proche, ton, voix, motif, charley, harmonie, MODES};
+  // écho écrit en notes : la note revient « fois » fois, tous les « pas », de moins en moins fort (le delay des musiques électroniques,
+  // sans effet à calculer : il fait partie de la partition, donc il est toujours calé sur le tempo)
+  function echo(add, sec, n, fois, pas, att){ const [ins, m, p, midi, d, v, , o] = n; for(let k = 1; k <= (fois || 2); k++){ const q = p + k*(pas || 3); add(sec, [ins, m + Math.floor(q/16), q % 16, midi, Math.min(d, 1.5), v*Math.pow(att || .5, k), undefined, o]); } }      // échos courts : ils ne tiennent pas sur l'accord suivant
+  /* Gabarit d'un morceau de club (house, techno, trance, dubstep…) : la forme des musiques électroniques, pas celle d'une chanson.
+       décompte 1 · intro (le groove s'installe, le filtre s'ouvre) · couplet · montée 4 (souffle qui grimpe, roulement qui se resserre,
+       un temps de silence) · drop · pause (plus de kick : on respire) · montée 4 · final (le drop, renforcé) · fin 2
+     Le gabarit s'occupe de ce qui est commun (montée, roulement, impact, silence avant le drop, notes à taper du roulement, harmonie
+     pour le jeu). Le morceau fournit ce qui fait son style :
+       groove(add, sec, m, c, cn, n, o)   batterie et basse ; n = intensité : -1 pause sans kick, 0 intro, 1 couplet, 2 drop, 3 final
+       harmo(add, sec, m, c, cn, n, cl)   accords ; cl = ouverture du filtre de 0 à 1 (à passer en {clarte} aux notes)
+       motifs: {intro, A, B, pause, final} une liste de mesures [[pas, durée, note de l'accord ou {n: midi}, geste, options]] jouée par « lead »
+       extra(add, sec, m, c, cn, n)       tout le reste (arpèges, effets)
+     cfg : bpm, swing, graine, cle, salle, pompage, final (transposition du final), prog: {intro, A, montee, B, pause, fin},
+       lead, leadBase, leadOctave, roule (instrument du roulement), grave (instrument de basse de la fin), instruments, gestes, frappe */
+  function club(cfg){
+    const {N, add} = cahier(), H = {}, k = cfg.final || 0, tr = (noms, kk) => noms.map(n => acc(n, kk || 0));
+    const jouer = (sec, m, c, cn, n, cl, kk, liste, fort) => {
+      cfg.groove(add, sec, m, c, cn, n, {}); cfg.harmo(add, sec, m, c, cn, n, cl); if(cfg.extra) cfg.extra(add, sec, m, c, cn, n);
+      const mo = liste && liste[m % liste.length]; if(mo) for(const [p, d, i, tag, o] of mo){ const midi = typeof i === 'object' ? i.n + kk : ton(c, i, cfg.leadBase || 67);
+        add(sec, [cfg.lead, m, p, midi, d, tag && tag[0] === 'H' ? .9 : tag && tag[1] === '1' ? 1 : .86, tag, o]); if(fort && cfg.leadOctave) add(sec, [cfg.leadOctave, m, p, midi + 12, d, .5, undefined, o]); } };
+    const Mo = cfg.motifs || {}, r = cfg.roule || 'clap';
+    H.decompte = [acc(cfg.prog.intro[0])]; [0, 4, 8, 12].forEach(p => add('decompte', [cfg.decompte || r, 0, p, 0, 1, p ? .7 : .9]));      // décompte bien audible : quatre coups de l'instrument qu'on tapera
+    H.intro = tr(cfg.prog.intro); H.intro.forEach((c, m, L) => jouer('intro', m, c, L[(m + 1) % L.length], m < L.length/2 ? 0 : .5, .15 + .85*m/(L.length - 1), 0, Mo.intro));
+    H.A = tr(cfg.prog.A); H.A.forEach((c, m, L) => jouer('A', m, c, L[(m + 1) % L.length], 1, 1, 0, Mo.A));
+    // la montée : le kick tombe à la dernière mesure, tout se tait sur le dernier temps
+    H.montee = tr(cfg.prog.montee); { const brut = N.montee = [], addM = (sec, ...ns) => { for(const n of ns) if(!(n[1] === 3 && (n[0] === 'kick' || n[2] >= 12))) brut.push(n); };
+      H.montee.forEach((c, m, L) => { cfg.groove(addM, 'montee', m, c, L[(m + 1) % 4], 1, {montee: m}); cfg.harmo(addM, 'montee', m, c, L[(m + 1) % 4], 1, .3 + .7*m/3); if(cfg.extra) cfg.extra(addM, 'montee', m, c, L[(m + 1) % 4], 1.5);
+        // roulement : noires, croches, doubles, de plus en plus fort ; les noires se tapent
+        const pas = m === 0 ? 4 : m === 1 ? 2 : 1; for(let p = 0; p < (m === 3 ? 12 : 16); p += pas){ const v = .3 + .6*(m*16 + p)/60; addM('montee', [r, m, p, 0, 1, v, p % 4 === 0 && (m < 2 ? p % 8 === 4 : true) ? (m === 2 ? 'J2' : 'J1') : undefined]); } });
+      brut.push(['mt', 0, 0, 60, 60, .9, '!']); }
+    const drop = (sec, kk, n, liste, fort) => { H[sec] = tr(cfg.prog.B, kk); H[sec].forEach((c, m, L) => jouer(sec, m, c, L[(m + 1) % L.length], n, 1, kk, liste, fort)); add(sec, ['rt', 0, 0, 60, 12, .9, '!'], ['crash', 0, 0, 0, 8, .8]); };
+    drop('B', 0, 2, Mo.B, false);
+    H.pause = tr(cfg.prog.pause); H.pause.forEach((c, m, L) => jouer('pause', m, c, L[(m + 1) % L.length], m < L.length/2 ? -1 : 0, 1 - .6*m/(L.length - 1), 0, Mo.pause));
+    drop('final', k, 3, Mo.final || Mo.B, true);
+    H.fin = tr(cfg.prog.fin, k); { const [c0, c1] = H.fin; cfg.harmo(add, 'fin', 0, c0, c1, 2, 1); add('fin', ['kick', 0, 0, 36, 2, 1], ['crash', 0, 0, 0, 8, .8], ['rt', 0, 0, 60, 14, .8, '!'], [cfg.lead, 0, 0, ton(c0, 0, cfg.leadBase || 67), 12, 1, 'C1'], [cfg.grave || 'basse', 0, 0, ton(c0, 0, cfg.graveBase || 36), 10, .9]); if(cfg.fin) cfg.fin(add, c0, c1); }
+    const g = cfg.gestes || 'CJ', sections = {}; for(const s of ['decompte', 'intro', 'A', 'montee', 'B', 'pause', 'final', 'fin']) sections[s] = {mesures: H[s].length, notes: N[s] || []};
+    const ins = Object.assign({mt: {type: 'montee', vol: .14, groupe: 'base'}, rt: {type: 'retombee', vol: .16, groupe: 'base'}, crash: {type: 'crash', vol: .16, groupe: 'base'}}, cfg.instruments);
+    if(!ins.scr) ins.scr = {type: 'rim', vol: .001, joueur: true, groupe: 'base'};
+    const G0 = gamme(cfg.cle[0], cfg.cle[1]), Gk = G0.map(x => (x + k) % 12);
+    const P = {bpm: cfg.bpm, sig: [4, 4], swing: cfg.swing || .5, swingSur: 16, humain: cfg.humain ?? 3, graine: cfg.graine || 1, pistes: true, pompage: cfg.pompage,
+      salle: cfg.salle || {taille: .55, amorti: .5, niveau: .5, predelai: .02}, instruments: ins, sections, forme: ['decompte', 'intro', 'A', 'montee', 'B', 'pause', 'montee', 'final', 'fin'],
+      jeu: {decompte: null, intro: ['Intro', 0, g], A: ['Couplet', 1, g], montee: ['Montée', 1, g], B: ['Drop', 2, g], pause: ['Pause', 'rest', g], final: ['Final', 3, g], fin: ['Fin', 'rest', g]},
+      harmonie: Object.fromEntries(Object.entries(H).map(([kk, v]) => [kk, harmonie(v)])), gamme: G0, gammes: {final: Gk, fin: Gk}};
+    return frappes(P, cfg.frappe);
+  }
+  window.K7M = {echo, club, hookAuto, batt, chanson, frappes, ROOT, acc, gamme, cahier, proche, ton, voix, motif, charley, harmonie, MODES};
   window.K7PARTITIONS = window.K7PARTITIONS || {};
 })();
