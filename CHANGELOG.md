@@ -3,6 +3,8 @@
 ## 1.5.0 — Vrais instruments, console de mixage
 - **Vrais instruments** (`src/pupitre-banques.js`) : une banque SoundFont 2 (.sf2) remplace les timbres synthétiques par des notes enregistrées, avec couches de vélocité, boucles, enveloppes et coupure des charleys. La partition ne change pas ; sans banque, ou pour un instrument absent, le synthé joue. La beatmap est identique dans les deux cas.
 - Banque téléchargée une fois (progression suivie), gardée sur l'appareil ; seuls les instruments du morceau sont préparés. `scripts/decouper-banque.mjs` découpe une banque en un fichier par instrument.
+- Garde-fous de `equiper()` : un jeu trop pauvre ou une batterie sur rythmique électronique restent au synthé, un jeu sourd est doublé par le synthé, et chaque vrai instrument est calé au niveau du timbre qu'il remplace.
+- Lecture vérifiée sur une vraie banque (TimGM6mb) : mêmes hauteurs que FluidSynth au dixième de hertz.
 - Nouvelles clés d'instrument : `reel`, `synthe` (doublure synthétique), `type: 'ech'` avec `prog`, `dynamique`, `desaccord`, `entier`.
 - **Console de mixage** (`src/pupitre-console.js`) : une piste par famille (batterie, basse, guitares, pianos, cordes, cuivres, synthés, autres) avec volume, balance, muet, solo, égaliseur paramétrique, réverbe, chorus, flanger, phaser, delay, distorsion, largeur stéréo ; général avec égaliseur, compresseur, largeur ; profils Rock, Pop, Électro, Orchestre, Acoustique, Automatique ; réglages gardés sur l'appareil ; panneau prêt à poser dans un jeu.
 - Le retard du compresseur général (6 ms) est déclaré à l'horloge : `position()` et `tempsA()` restent justes.

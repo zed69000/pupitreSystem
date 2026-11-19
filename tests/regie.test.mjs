@@ -76,6 +76,10 @@ test('profil automatique : choisi d\'après les instruments du morceau', () => {
   assert.equal(profilAuto(ins(['kick_electro', 'synth_basse', 'supersaw', 'synth_lead', 'clap'])).profil, 'electro');
   assert.equal(profilAuto(ins(['guitare', 'contrebasse_pizz', 'piano'])).profil, 'acoustique');
   assert.equal(profilAuto(ins(['kick', 'caisse', 'basse', 'rhodes', 'trompettes'])).profil, 'pop');
+  assert.equal(profilAuto(ins(['kick', 'caisse', 'charley', 'basse', 'guitare', 'piano', 'violons', 'altos', 'cuivres_stab', 'choeur'])).profil, 'pop', 'disco avec cordes : un groupe, pas un orchestre');
+  assert.equal(profilAuto(ins(['kick', 'clap', 'charley', 'rim', 'ride', 'synth_basse', 'nappe', 'synth_pluck'])).profil, 'electro', 'la batterie ne compte pas comme instrument acoustique');
+  assert.equal(profilAuto(ins(['tom', 'rim', 'shaker', 'basse', 'piano', 'trompettes', 'trombones', 'choeur'])).profil, 'acoustique', 'salsa : pas un orchestre');
+  assert.equal(profilAuto(ins(['violons', 'cors', 'timbales']), { profil: 'rock' }).profil, 'rock', 'la partition peut choisir');
   magasin(); const p = faux(), R = new Regie(p, { profil: 'auto' });
   R.surMorceau({ bpm: 90 }, ins(['kick', 'basse', 'guitare_sat']));
   assert.equal(R.etat.choisi, 'rock'); assert.equal(R.tempo, 90); assert.deepEqual(R.presentes, ['batterie', 'basse', 'guitares']);

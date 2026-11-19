@@ -77,7 +77,7 @@ const mesurer = cfg => page.evaluate(async cfg => {
   if (R) { for (const [k, v] of Object.entries(cfg.tranche || {})) R.regler('batterie', k, v); for (const [k, v] of Object.entries(cfg.general || {})) R.reglerGeneral(k, v); }
   const b = new PupitreBanques(p); await b.ouvrir(cfg.sf2, { nom: 'mesure', cache: false });
   const P = { bpm: 120, swing: 0.58, humain: 6, graine: 4, salle: { niveau: 0 }, instruments: { k: { type: 'kick', vol: 0.5 } }, sections: { A: { mesures: 2, notes: [0, 3, 6, 9, 12, 16, 21, 26].map(x => ['k', 0, x, 36, 1, 1]) } }, forme: ['A'] };
-  await b.equiper(P); await p.charger(P, { qualite: 'haute' });
+  await b.equiper(P, { niveaux: false }); await p.charger(P, { qualite: 'haute' });      // son brut de la banque (un clic net) : sans doublure synthétique, l'attaque se repère à l'échantillon près
   const quand = ctx.currentTime + 0.4; p.jouer({ quand }); await new Promise(r => setTimeout(r, 4800));
   // pour chaque note annoncée : le premier échantillon fort dans une fenêtre de −20 à +30 ms (seuil à 30 % du pic : les échos du delay, plus faibles, ne comptent pas)
   const sr = ctx.sampleRate, attendus = p.beatmap().map(n => quand + n.t), trouves = []; let pic = 0;

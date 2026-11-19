@@ -33,16 +33,17 @@
 
 // Type Pupitre → programme General MIDI (banque 128 = batterie, note = touche du kit).
 // Les synthés (nappe, synth_*, supersaw, chip, talkbox, kick_electro) restent synthétisés : là, le synthé EST l'instrument.
+// `attaque` plafonne les attaques lentes de certaines banques (0,45 s pour des cordes) : dans un jeu de rythme, la note doit parler sur son temps.
 const GM = {
   piano: { p: 0 }, rhodes: { p: 4 }, orgue: { p: 16 },
   guitare: { p: 25 }, guitare_sat: { p: 29 }, guitare_etouffee: { p: 28 },
   basse: { p: 33 }, contrebasse_pizz: { p: 32 },
-  violons: { p: 48 }, altos: { p: 48 }, violoncelles: { p: 48 }, contrebasses: { p: 48 }, cordes_stacc: { p: 48, attaque: 0.004, relache: 0.25 },
+  violons: { p: 48, attaque: 0.09 }, altos: { p: 48, attaque: 0.09 }, violoncelles: { p: 48, attaque: 0.09 }, contrebasses: { p: 48, attaque: 0.09 }, cordes_stacc: { p: 48, attaque: 0.004, relache: 0.25 },
   pizz: { p: 45 }, harpe: { p: 46 },
-  cors: { p: 60 }, trompettes: { p: 56 }, trombones: { p: 57 }, cuivres_stab: { p: 61 },
+  cors: { p: 60, attaque: 0.05 }, trompettes: { p: 56 }, trombones: { p: 57 }, cuivres_stab: { p: 61 },
   flute: { p: 73 }, clarinette: { p: 71 }, hautbois: { p: 68 },
   glockenspiel: { p: 9 }, celesta: { p: 8 }, marimba: { p: 12 }, xylophone: { p: 13 }, cloches_tubes: { p: 14 },
-  choeur: { p: 52 }, timbales: { p: 47 },
+  choeur: { p: 52, attaque: 0.06 }, timbales: { p: 47 },
   kick: { b: 128, note: 36 }, caisse: { b: 128, note: 38 }, caisse_militaire: { b: 128, note: 40 }, rim: { b: 128, note: 37 },
   charley: { b: 128, note: 42 }, charley_ouvert: { b: 128, note: 46 }, crash: { b: 128, note: 49 }, ride: { b: 128, note: 51 },
   clap: { b: 128, note: 39 }, shaker: { b: 128, note: 70 }, tom: { b: 128, note: 'tom' }, grosse_caisse: { b: 128, note: 35 },
@@ -122,7 +123,9 @@ function lireSF2(tampon) {
       }
     }
     if (!zones.length) return null;
-    return { nom: pr.nom, banque: pr.banque, programme: pr.programme, gain: Math.min(8, 0.6 / (picMax || 1)), zones, ech };
+    // deux mesures de la richesse du jeu : durée moyenne d'un son (un cycle bouclé de 20 ms n'est pas un enregistrement) et finesse (fréquence d'origine)
+    const srs = ech.map((e, i) => (zones.find(z => z.s === i) || {}).sr || 44100), duree = ech.reduce((t, e, i) => t + e.length / srs[i], 0);
+    return { nom: pr.nom, banque: pr.banque, programme: pr.programme, gain: Math.min(8, 0.6 / (picMax || 1)), moyenne: duree / ech.length, srMax: Math.max(...srs), zones, ech };
   }
   return { nom, octets: tampon.byteLength, presets: presets.map(p => ({ nom: p.nom, banque: p.banque, programme: p.programme })), jeu };
 }
@@ -144,12 +147,16 @@ function deballer(buf) {
 }
 
 /** Les jeux qu'une partition demande : { 'gm:0:0': { banque, programme, types: ['piano'] } } */
-function besoins(P) {
+function besoins(P, o = {}) {
+  // Section rythmique électronique (basse de synthé ou kick électronique) : la boîte à rythmes synthétisée EST le bon instrument,
+  // une batterie acoustique enregistrée changerait le style du morceau. `batterie: true` ou `false` force le choix.
+  const types = Object.entries(P.instruments || {}).map(([k, I]) => I.type || k), electro = types.includes('synth_basse') || types.includes('kick_electro');
+  const kit = o.batterie === true || (o.batterie !== false && !electro);
   const out = {}, ajout = (b, p, t) => { const k = nomJeu(b, p); (out[k] || (out[k] = { banque: b, programme: p, types: [] })).types.push(t); };
   for (const [k, I] of Object.entries(P.instruments || {})) {
     if (I.reel === false || P.reel === false) continue;
     if (I.prog != null) { ajout(I.banque || 0, I.prog, k); continue; }
-    const t = GM[I.type] ? I.type : GM[k] ? k : null; if (t) ajout(GM[t].b || 0, GM[t].p || 0, t);
+    const t = GM[I.type] ? I.type : GM[k] ? k : null; if (t && (kit || GM[t].b !== 128)) ajout(GM[t].b || 0, GM[t].p || 0, t);
   }
   return out;
 }
@@ -158,7 +165,7 @@ const CACHE = 'pupitre-banques', ADRESSE = n => 'https://pupitre.local/banque/' 
 const pause = () => new Promise(r => setTimeout(r, 0));
 
 class Banques {
-  constructor(pupitre) { this.pupitre = pupitre; this.source = null; this.etat = { nom: null, octets: 0, jeux: 0, memoire: 0, enCache: false, phase: 'vide' }; this._poses = new Set(); }
+  constructor(pupitre) { this.pupitre = pupitre; this.source = null; this.etat = { nom: null, octets: 0, jeux: 0, memoire: 0, enCache: false, phase: 'vide' }; this._poses = new Map(); this._ecartes = new Map(); this._niv = {}; }
 
   /** Les banques déjà gardées sur l'appareil. */
   static async enCache() { try { const c = await caches.open(CACHE); return (await c.keys()).map(r => decodeURIComponent(r.url.split('/').pop())); } catch (e) { return []; } }
@@ -184,7 +191,7 @@ class Banques {
       else throw new Error('Aucune banque à ouvrir');
       if (cache && o.cache !== false) try { await cache.put(ADRESSE(nom), new Response(buf.slice(0))); this.etat.enCache = true; } catch (e) {}
     }
-    const sf = lireSF2(buf); this.source = { presets: sf.presets, jeu: async (b, p) => sf.jeu(b, p) };
+    const sf = lireSF2(buf); if (this._poses.size || this._ecartes.size) this.retirer(); this.source = { presets: sf.presets, jeu: async (b, p) => sf.jeu(b, p) };
     Object.assign(this.etat, { titre: sf.nom, octets: buf.byteLength, phase: 'ouverte' });
     try { localStorage.setItem('pupitre.banque', nom); } catch (e) {}
     return sf.presets;
@@ -200,7 +207,7 @@ class Banques {
   /** Ouvre un dossier découpé par scripts/decouper-banque.mjs : seul l'index est lu, chaque instrument à la demande. */
   async ouvrirDossier(base, o = {}) {
     base = base.replace(/\/?$/, '/'); const r = await fetch(base + 'index.json'); if (!r.ok) throw new Error('Index de banque introuvable : ' + base);
-    const index = await r.json();
+    const index = await r.json(); if (this._poses.size || this._ecartes.size) this.retirer();
     this.source = { presets: index.presets, jeu: async (b, p) => {
       const e = index.presets.find(x => x.banque === b && x.programme === p) || (b === 128 ? index.presets.find(x => x.banque === 128) : null); if (!e) return null;
       let rep = null, cache = null; try { cache = await caches.open(CACHE); rep = await cache.match(base + e.fichier); } catch (err) {}
@@ -211,27 +218,73 @@ class Banques {
     return index.presets;
   }
 
-  /** Prépare les vrais instruments d'une partition (et seulement ceux-là), puis les pose dans le moteur. */
+  /**
+   * Prépare les vrais instruments d'une partition (et seulement ceux-là), puis les pose dans le moteur.
+   * Trois garde-fous, pour qu'une banque modeste n'abîme jamais un morceau :
+   *  - un jeu trop pauvre (sons d'un seul cycle, moins de `dureeMin` s en moyenne) est laissé au synthé, meilleur dans ce cas ;
+   *  - un jeu sourd (enregistré sous 20 kHz) est doublé par le synthé (`doublure`, 35 %) qui lui rend ses aigus ;
+   *  - chaque instrument est mis au même niveau que le timbre synthétique qu'il remplace : le mixage écrit dans la partition reste valable.
+   *    S'il reste trop faible une fois son pic plafonné, le synthé le double pour rendre le corps qui manque.
+   */
   async equiper(P, o = {}) {
     if (!this.source) throw new Error('Banques : ouvrir() avant equiper()');
-    const B = besoins(P), cles = Object.keys(B), table = Object.assign({}, this.pupitre.reel), manquants = []; let faits = 0;
+    // la table est refaite pour CE morceau : un instrument associé pour le morceau précédent ne déborde pas sur celui-ci
+    const B = besoins(P, o), cles = Object.keys(B), table = {}, manquants = [], pauvres = []; let faits = 0;
+    const dureeMin = o.dureeMin ?? 0.2, doublure = o.doublure ?? 0.35;
     this.etat.phase = 'instruments';
     for (const k of cles) {
       o.onProgres && o.onProgres({ phase: 'instruments', faits, total: cles.length, nom: k });
-      if (!this._poses.has(k)) {
+      if (!this._poses.has(k) && !this._ecartes.has(k)) {
         const j = await this.source.jeu(B[k].banque, B[k].programme); await pause();        // on rend la main entre deux instruments : l'écran reste fluide
-        if (j) { this.pupitre.banque(k, j); this._poses.add(k); this.etat.jeux++; this.etat.memoire += j.ech.reduce((s, e) => s + e.length * 2, 0) / 1048576; } else manquants.push(k);
+        if (!j) this._ecartes.set(k, 'absent');
+        else if (B[k].banque !== 128 && j.moyenne != null && j.moyenne < dureeMin) this._ecartes.set(k, 'pauvre');
+        else { this.pupitre.banque(k, j); this._poses.set(k, { sourd: j.srMax < 20000 }); this.etat.jeux++; this.etat.memoire += j.ech.reduce((s, e) => s + e.length * 2, 0) / 1048576; }
       }
-      if (this._poses.has(k)) for (const t of B[k].types) if (GM[t]) table[t] = Object.assign({ ech: k }, GM[t].note != null ? { note: GM[t].note } : {}, GM[t].attaque != null ? { attaque: GM[t].attaque, relache: GM[t].relache } : {});
+      if (this._ecartes.get(k) === 'absent') manquants.push(k); else if (this._ecartes.has(k)) pauvres.push(k);
+      if (this._poses.has(k)) for (const t of B[k].types) if (GM[t]) {
+        const { b, p, ...plus } = GM[t];
+        table[t] = Object.assign({ ech: k }, plus, this._poses.get(k).sourd && doublure > 0 ? { synthe: doublure } : {});
+      }
       faits++;
     }
-    this.pupitre.associer(table); this.etat.phase = 'prete';
+    this.pupitre.associer(table);
+    if (o.niveaux !== false && this.pupitre.K && this.pupitre.K.rendre) { await this._niveaux(P, table, doublure); this.pupitre.associer(table); }
+    this.etat.phase = 'prete';
     o.onProgres && o.onProgres({ phase: 'prete', faits, total: cles.length });
-    return { instruments: cles.filter(k => this._poses.has(k)), manquants };
+    return { instruments: cles.filter(k => this._poses.has(k)), manquants, pauvres };
+  }
+
+  // Met chaque vrai instrument au niveau du timbre synthétique qu'il remplace. Quatre notes prises dans la partie écrite pour lui
+  // (du grave à l'aigu) sont jouées des deux façons et comparées en énergie, avec un plafond sur le pic : 40 % de plus que le synthé pour la
+  // batterie (un vrai coup est plus pointu, et ses pics feraient pomper le limiteur), 80 % pour les instruments à notes.
+  // Si, à ce plafond, le vrai instrument reste nettement en dessous (un kick enregistré court face à un kick synthétique qui gronde),
+  // le synthé le double pour rendre le corps qui manque : c'est le mélange « vrais instruments + base synthétique ».
+  async _niveaux(P, table, doublure) {
+    const K = this.pupitre.K, sr = 16000, mes = r => { let s = 0, pic = 0; const n = r.L.length; for (let i = 0; i < n; i++) { s += r.L[i] * r.L[i] + r.R[i] * r.R[i]; const a = Math.max(Math.abs(r.L[i]), Math.abs(r.R[i])); if (a > pic) pic = a; } return { eff: Math.sqrt(s / n), pic }; };
+    for (const [k, I] of Object.entries(P.instruments || {})) {
+      const t = GM[I.type] ? I.type : GM[k] ? k : null; if (!t || !table[t] || table[t].niveau != null || I.reel === false) continue;
+      const toutes = []; for (const S of Object.values(P.sections || {})) for (const e of S.notes || []) if (e[0] === k) toutes.push(e);
+      toutes.sort((x, y) => x[3] - y[3]); const choix = toutes.length ? [0, 1, 2, 3].map(i => toutes[Math.round(i * (toutes.length - 1) / 3)]) : [[k, 0, 0, 60, 4, 0.8]];
+      const cle = t + '|' + table[t].ech + '|' + choix.map(e => e[3]).join(',') + '|' + JSON.stringify(I);       // même instrument, mêmes réglages, mêmes notes : déjà mesuré
+      if (this._niv[cle]) { Object.assign(table[t], this._niv[cle]); continue; }
+      const essai = reel => ({ bpm: 120, humain: 0, reel, salle: { niveau: 0 }, instruments: { x: Object.assign({}, I, { groupe: 'principal', joueur: false, pan: 0, synthe: 0, niveau: 1 }) },
+        sections: { A: { mesures: 1, notes: choix.map((e, i) => ['x', 0, i * 4, e[3], Math.min(4, e[4] || 1), 0.8]) } }, forme: ['A'] });
+      const res = { niveau: 1 };
+      try {
+        const a = mes(K.rendre(essai(false), 'A', 'tout', sr)), b = mes(K.rendre(essai(true), 'A', 'tout', sr));
+        if (a.eff > 1e-6 && b.eff > 1e-6) {
+          const plafond = GM[t].b === 128 ? 1.4 : 1.8; let d = table[t].synthe || 0, n = Math.max(0.25, Math.min(4, a.eff / b.eff, plafond * a.pic / b.pic));
+          const part = n * b.eff / a.eff; if (part < 0.75 && doublure > 0) d = Math.max(d, Math.min(0.9, Math.sqrt(1 - part * part)));
+          if (d > 0) { n = Math.min(n, Math.sqrt(1 - d * d) * a.eff / b.eff, (plafond - d) * a.pic / b.pic); res.synthe = Math.round(d * 100) / 100; }      // vrai + doublure : l'énergie du synthé seul, pics additionnés sous le plafond
+          res.niveau = n;
+        }
+      } catch (e) {}
+      Object.assign(table[t], res); this._niv[cle] = res; await pause();                        // la mesure se fait par petits bouts : l'écran de chargement reste fluide
+    }
   }
 
   /** Retire tous les vrais instruments : retour au timbre synthétique. */
-  retirer() { for (const k of this._poses) this.pupitre.banque(k, null); this._poses.clear(); this.pupitre.associer({}); this.etat.jeux = 0; this.etat.memoire = 0; this.etat.phase = this.source ? 'ouverte' : 'vide'; }
+  retirer() { for (const k of this._poses.keys()) this.pupitre.banque(k, null); this._poses.clear(); this._ecartes.clear(); this._niv = {}; this.pupitre.associer({}); this.etat.jeux = 0; this.etat.memoire = 0; this.etat.phase = this.source ? 'ouverte' : 'vide'; }
 }
 
 if (typeof window !== 'undefined') { window.PupitreBanques = Banques; window.PupitreSF2 = { lireSF2, emballer, deballer, besoins, GM }; }

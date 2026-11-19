@@ -53,7 +53,24 @@ await banques.equiper(partition, { onProgres: p => barre(p.faits / p.total) });
 await pupitre.charger(partition);
 ```
 
-`equiper()` renvoie `{ instruments, manquants }` : un instrument absent de la banque reste synthétique.
+`equiper()` renvoie `{ instruments, manquants, pauvres }`.
+
+### Les garde-fous : une banque modeste n'abîme jamais un morceau
+
+```
+pour chaque instrument du morceau
+   ├─ absent de la banque ───────────────► synthé
+   ├─ trop pauvre (un cycle bouclé) ─────► synthé            (dureeMin : 0,2 s en moyenne par son)
+   ├─ sourd (enregistré sous 20 kHz) ────► vrai + 35 % de synthé qui rend les aigus   (doublure)
+   ├─ batterie, rythmique électronique ──► synthé            (batterie : 'auto')
+   └─ sinon ─────────────────────────────► vrai instrument
+puis : niveau calé sur celui du synthé remplacé (4 notes de sa partie, jouées des deux façons)
+       └─ encore trop faible une fois le pic plafonné ? le synthé le double pour rendre le corps
+```
+
+- **Pourquoi écarter les jeux pauvres** : les petites banques tiennent en quelques Mo en remplaçant l'enregistrement par un seul cycle d'onde bouclé (20 ms). C'est moins bon que le timbre synthétique de Pupitre, qui a ses enveloppes et son filtre.
+- **Pourquoi garder la boîte à rythmes** : un morceau à basse de synthé ou à kick électronique est écrit pour elle ; une batterie acoustique enregistrée changerait son style. `equiper(P, { batterie: true })` force la vraie batterie.
+- **Pourquoi caler les niveaux** : le mixage est écrit dans la partition (les `vol`). Un vrai instrument plus fort ou plus faible que le synthé qu'il remplace le fausserait. Vérifié sur les 30 partitions de Beat Splash : niveau du mélange entre 0,6 et 1,1 fois celui du synthé, pics comparables.
 
 ### Dans la partition
 
@@ -109,7 +126,7 @@ Dès qu'une régie est branchée, `charger()` fabrique **une piste par famille**
 
 Réglages d'une tranche : `vol`, `pan`, `muet`, `solo`, `effets` (coupe tout le traitement), égaliseur paramétrique (`grave`, `graveF`, `medium`, `mediumF`, `mediumQ`, `aigu`, `aiguF`), `reverbe`, `chorus`, `flanger`, `phaser`, `delay` (`delayTemps` en temps du morceau, `delayRetour`), `disto` (`distoGain`), `largeur`. Bornes et valeurs par défaut : `Regie.TRANCHE` et `Regie.GENERAL`.
 
-Profils : `rock`, `pop`, `electro`, `orchestre`, `acoustique`, `neutre`, et `auto`, qui lit les instruments du morceau (guitare saturée → rock, trois instruments d'orchestre sans synthé → orchestre, deux synthés → électro, ni batterie ni synthé → acoustique, sinon pop). Les écarts restent mesurés : 3 dB au plus à l'égaliseur, 35 % au plus pour un effet (vérifié par test). Changer de profil garde les volumes, balances, muets et solos réglés à la main.
+Profils : `rock`, `pop`, `electro`, `orchestre`, `acoustique`, `neutre`, et `auto`, qui lit les instruments du morceau (guitare saturée → rock ; synthés majoritaires → électro ; trois instruments d'orchestre sans kick, basse électrique ni guitare → orchestre ; ni batterie ni synthé → acoustique ; sinon pop). Une partition peut trancher elle-même avec `profil: 'rock'`. Les écarts restent mesurés : 3 dB au plus à l'égaliseur, 35 % au plus pour un effet (vérifié par test). Changer de profil garde les volumes, balances, muets et solos réglés à la main.
 
 ## Ce que ça coûte
 
@@ -123,6 +140,7 @@ Sur un téléphone à court de mémoire, garder la console pour les réglages et
 
 ## Vérifier
 
+- `npm test` : 5 tests sur une vraie banque quand la machine en a une (`BANQUE=chemin.sf2`, par défaut TimGM6mb de Debian) : justesse comparée à FluidSynth, attaques, niveaux, et les 30 partitions de Beat Splash fabriquées en vrais instruments. Sautés sinon.
 - `npm test` : 25 tests de plus (banque lue, justesse à 440 Hz, boucle, couches de vélocité, synchro à moins de 2 ms, beatmap identique, repli sur le synthé, console, profils, sauvegarde).
 - `npm run banc && npm run test:navigateur` : dans Chrome, les fils de calcul, le cache, le panneau, et l'heure réelle de chaque attaque mesurée sur le son sorti.
 - `dist/regie.html` : la page d'écoute. Choisir une banque, un morceau, comparer vrais instruments et synthé, régler la console.

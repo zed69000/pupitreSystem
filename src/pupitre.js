@@ -584,7 +584,7 @@ function NOYAU() {
       // zones qui couvrent la note et la vélocité ; hors tessiture : la zone la plus proche
       let dmin = Infinity; const dz = J.zones.map(z => { const d = Math.max(0, z.lo - nz, nz - z.hi) + Math.max(0, z.vlo - v127, v127 - z.vhi) * 0.01; if (d < dmin) dmin = d; return d; });
       const Z = J.zones.filter((z, i) => dz[i] === dmin), z0 = Z[0];
-      const g = (I.vol ?? 0.5) * Math.pow(e.vel, I.courbe ?? 1.4) * (J.gain || 1), verb = I.verb ?? 0.2, panI = clamp((I.pan || 0) + (I.etale ? (((idx * 0.618034) % 1) - 0.5) * I.etale : 0), -1, 1);
+      const g = (I.vol ?? 0.5) * Math.pow(e.vel, I.courbe ?? 1.4) * (J.gain || 1) * (I.niveau ?? 1), verb = I.verb ?? 0.2, panI = clamp((I.pan || 0) + (I.etale ? (((idx * 0.618034) % 1) - 0.5) * I.etale : 0), -1, 1);
       const des = (this.bz.n() * (I.desaccord ?? 3)) / 1200, hum = 1 + this.bz.n() * 0.04;            // variations naturelles : ±3 cents, ±0,3 dB
       this.c = Z.map(z => {
         const d = J.ech[z.s], touche = z.touche >= 0 ? z.touche : note;

@@ -106,6 +106,8 @@ test('un instrument emballé dans un fichier se relit à l\'identique', () => {
 test('seuls les instruments de la partition sont préparés', async () => {
   const P = P1([], { instruments: { p: { type: 'piano' }, k: { type: 'kick' }, h: { type: 'charley' }, s: { type: 'supersaw' }, f: { type: 'flute' } } });
   assert.deepEqual(Object.keys(besoins(P)).sort(), ['gm:0:0', 'gm:0:73', 'gm:128:0']);
+  const electro = P1([], { instruments: { k: { type: 'kick' }, b: { type: 'synth_basse' }, p: { type: 'piano' } } });
+  assert.deepEqual(Object.keys(besoins(electro)), ['gm:0:0'], 'rythmique électronique : la batterie reste synthétisée'); assert.deepEqual(Object.keys(besoins(electro, { batterie: true })).sort(), ['gm:0:0', 'gm:128:0']);
   const poses = [], faux = { reel: {}, banque: (n, j) => poses.push([n, !!j]), associer(t) { this.reel = t; } }, B = new Banques(faux);
   await B.ouvrir(banqueDeTest(), { nom: 'test' });
   const etapes = [], r = await B.equiper(P, { onProgres: p => etapes.push(p.phase + ' ' + p.faits + '/' + p.total) });

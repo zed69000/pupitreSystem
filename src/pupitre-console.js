@@ -74,14 +74,21 @@ const PROFILS = {
     batterie: { reverbe: 0.12, aigu: 1 }, basse: { medium: 1, mediumF: 700 }, guitares: { aigu: 1.5, reverbe: 0.18 }, pianos: { reverbe: 0.2 }, cordes: { reverbe: 0.25 }, autres: { reverbe: 0.2 } } },
 };
 
-/** Profil automatique : lit les instruments du morceau et choisit le traitement. Renvoie { profil, raison }. */
-function profilAuto(INS) {
+/**
+ * Profil automatique : lit les instruments du morceau et choisit le traitement. Renvoie { profil, raison }.
+ * La partition peut trancher elle-même avec `profil: 'rock'`. Les règles, dans l'ordre :
+ *   guitare saturée → rock ; synthés majoritaires parmi les instruments à notes → électro ;
+ *   3 instruments d'orchestre ou plus, sans kick, basse électrique ni guitare → orchestre ;
+ *   ni kick ni caisse claire, ni synthé → acoustique ; sinon pop.
+ */
+function profilAuto(INS, P) {
+  if (P && PROFILS[P.profil]) return { profil: P.profil, raison: 'choisi par la partition' };
   const L = Object.values(INS || {}), t = x => L.filter(I => x.test(I.type || '')).length, f = n => L.filter(I => I.famille === n).length;
-  const sat = t(/^guitare_(sat|etouffee)$/), synth = f('synthes') + t(/^(synth_basse|kick_electro)$/), orch = f('cordes') + f('cuivres') + t(/^(flute|clarinette|hautbois|timbales|choeur|grosse_caisse)$/);
-  const kit = t(/^(kick|kick_electro|caisse|charley)$/), acou = L.length - synth;
-  if (sat) return { profil: 'rock', raison: 'guitare saturée' };
-  if (orch >= 3 && !synth && orch > kit) return { profil: 'orchestre', raison: orch + ' instruments d\'orchestre' };
-  if (synth >= 2 && synth >= acou - kit) return { profil: 'electro', raison: synth + ' synthés' };
+  const notes = L.length - f('batterie'), synth = f('synthes') + t(/^synth_basse$/), kit = t(/^(kick|kick_electro|caisse)$/);
+  const orch = f('cordes') + f('cuivres') + t(/^(flute|clarinette|hautbois|timbales|choeur|grosse_caisse|caisse_militaire)$/);
+  if (t(/^guitare_sat$/)) return { profil: 'rock', raison: 'guitare saturée' };
+  if (synth >= 2 && synth > notes * 0.6) return { profil: 'electro', raison: synth + ' synthés sur ' + notes + ' instruments à notes' };
+  if (orch >= 3 && !t(/^(kick|kick_electro|basse|synth_basse|guitare)/)) return { profil: 'orchestre', raison: orch + ' instruments d\'orchestre' };
   if (!kit && !synth) return { profil: 'acoustique', raison: 'ni batterie ni synthé' };
   return { profil: 'pop', raison: 'groupe mixte' };
 }
@@ -230,7 +237,7 @@ class Regie {
 
   /** Appelé par Pupitre à chaque charger() : tempo du delay et profil automatique. */
   surMorceau(P, INS) {
-    this.tempo = P.bpm || 120; this.auto = profilAuto(INS);
+    this.tempo = P.bpm || 120; this.auto = profilAuto(INS, P);
     this.presentes = FAMILLES.filter(f => Object.values(INS).some(I => (FAMILLES.includes(I.famille) ? I.famille : 'autres') === f)); for (const f of this.presentes) this.entree(f);
     if (this.etat.profil === 'auto') this.profil('auto'); else this._tout();
     this.surChange && this.surChange('tranches');
