@@ -80,6 +80,20 @@ Mettre le jeu en pause : `ctx.suspend()` (l’horloge s’arrête avec le son), 
 
 Le fichier marche aussi sans module (`<script src="pupitre.js">`, en retirant la dernière ligne `export`) : il expose alors `window.Pupitre` et `window.PupitreEcriture`.
 
+## Vrais instruments et console de mixage
+
+Depuis la version 1.5, deux modules facultatifs s'ajoutent au moteur. Voir [docs/regie.md](docs/regie.md).
+
+```
+banque .sf2 ──► pupitre-banques.js ──► les fils de calcul jouent les notes enregistrées
+                                        (repli sur le synthé si l'instrument manque)
+pistes par famille ──► pupitre-console.js ──► égaliseur, effets, profils ──► limiteur
+```
+
+- **Pourquoi** : les timbres synthétisés plafonnaient à un son de console de jeu. De vrais instruments enregistrés changent le timbre sans toucher aux partitions ni à la beatmap.
+- **Ce qui est gardé** : la fabrication à l'avance dans les fils de calcul, donc aucun craquement, et la synchro (vérifiée sur le son sorti).
+- **Ce qui change** : la musique en vrais instruments demande un fichier de sons (la banque), téléchargé une fois puis gardé sur l'appareil.
+
 ## Écrire une partition
 
 Voir [docs/partition.md](docs/partition.md). En bref :
@@ -100,11 +114,17 @@ Une note : `[instrument, mesure, pas, midi, durée en pas, vélocité, tag?]`. U
 
 ```
 src/pupitre.js                    le moteur (un seul fichier, sans dépendance)
+src/pupitre-banques.js            vrais instruments : lecture des banques .sf2, cache, chargement à la demande
+src/pupitre-console.js            console de mixage, rack d'effets, profils, panneau
+exemples/regie.modele.html        page d'écoute : banque, avant/après, console (→ dist/regie.html)
+scripts/decouper-banque.mjs       une banque → un fichier par instrument
+tests/navigateur/                 essais dans Chrome (npm run test:navigateur)
 exemples/partitions.js            « Serment » (orchestral, 55 voix) et « Poche soul » (jeu de rythme)
 exemples/banc-essai.modele.html   page de test : charge, couches, mini jeu de rythme, mesures enregistrées
 scripts/construire-banc.mjs       npm run banc → dist/banc-essai.html (page autonome en un fichier)
-tests/                            npm test → 47 tests (instruments, morceaux, synchro)
+tests/                            npm test → instruments, morceaux, synchro, banques, console
 docs/partition.md                 format des partitions et liste des instruments
+docs/regie.md                     vrais instruments et console : schéma, raisons, mode d'emploi, coûts
 ```
 
 ## Mesures de référence
@@ -124,6 +144,7 @@ Les mesures sur téléphone se font avec le banc d’essai (`npm run banc`, ou l
 
 ## Limites connues
 
-- Les timbres sont **synthétisés**, sans échantillons : l’orchestre sonne comme un orchestre de synthèse soigné, pas comme de vraies cordes enregistrées. Ils s’amélioreront avec le défi musique.
+- Sans banque de sons, les timbres sont **synthétisés** : l’orchestre sonne comme un orchestre de synthèse soigné. Avec une banque .sf2, les notes sont de vrais enregistrements (voir docs/regie.md) ; la qualité est alors celle de la banque choisie.
+- Les banques compressées (.sf3) et DLS ne sont pas lues, ni les modulateurs et vibratos propres à chaque son d'une banque.
 - La mémoire grandit avec la musique **unique** : environ 0,35 Mo par seconde en stéréo 44,1 kHz, multipliée par le nombre de couches.
 - Changer la partition **pendant** la lecture demande un nouveau `charger()` : le moteur n’est pas fait pour une musique générée note à note en temps réel (pour ça, il faudrait un mode AudioWorklet, prévu mais pas fait).

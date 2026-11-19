@@ -564,7 +564,72 @@ function NOYAU() {
     }
   }
 
-  const CLASSES = { Synthe, Orgue, Rhodes, Piano, Basse, Corde, Cordes, Cuivres, Bois, Cloche, Choeur, Nappe, Kick, Caisse, Metal, Clap, Tom, Timbale, GrosseCaisse, Shaker, Rim };
+  // ─── Vrais instruments : des notes ENREGISTRÉES (jeux d'échantillons) ───────────
+  // Un jeu = { gain, zones: [{ lo, hi, vlo, vhi, root, cents, echelle, sr, s, bA, bB, mode, att, dec, sus, rel, gain, pan, fc, excl }], ech: [Int16Array] }
+  // (fabriqué par pupitre-banques.js à partir d'une banque SF2). La partition ne change pas : seul ce qui joue la note change,
+  // donc les temps, la beatmap et la synchro restent ceux du calcul habituel.
+  const JEUX = {}; let REEL = {};
+  function poserJeu(nom, jeu) { if (jeu) JEUX[nom] = jeu; else delete JEUX[nom]; }
+  function associer(t) { REEL = t || {}; }
+  const ENVB = new Float32Array(64);
+  // lecture d'un échantillon avec repli dans la boucle (bB < 0 : pas de boucle)
+  const lire = (d, j, bA, bB) => (bB > 0 && j >= bB ? d[bA + (j - bB) % (bB - bA)] : j < d.length ? d[j] : 0);
+
+  class Echantillon extends Voix {
+    constructor(I, e, sr, idx) {
+      super(I, e, sr, idx);
+      const J = JEUX[I.ech], m = e.midi + (I.transpo || 0), v127 = clamp(Math.round(e.vel * 127), 1, 127);
+      // batterie : la note de la banque est fixée par l'instrument (kick = 36…), 'tom' la choisit d'après la hauteur écrite
+      const note = I.note === 'tom' ? (m < 45 ? 41 : m < 50 ? 45 : m < 57 ? 47 : 50) : I.note != null ? I.note : m, nz = clamp(Math.round(note), 0, 127);
+      // zones qui couvrent la note et la vélocité ; hors tessiture : la zone la plus proche
+      let dmin = Infinity; const dz = J.zones.map(z => { const d = Math.max(0, z.lo - nz, nz - z.hi) + Math.max(0, z.vlo - v127, v127 - z.vhi) * 0.01; if (d < dmin) dmin = d; return d; });
+      const Z = J.zones.filter((z, i) => dz[i] === dmin), z0 = Z[0];
+      const g = (I.vol ?? 0.5) * Math.pow(e.vel, I.courbe ?? 1.4) * (J.gain || 1) * (I.niveau ?? 1), verb = I.verb ?? 0.2, panI = clamp((I.pan || 0) + (I.etale ? (((idx * 0.618034) % 1) - 0.5) * I.etale : 0), -1, 1);
+      const des = (this.bz.n() * (I.desaccord ?? 3)) / 1200, hum = 1 + this.bz.n() * 0.04;            // variations naturelles : ±3 cents, ±0,3 dB
+      this.c = Z.map(z => {
+        const d = J.ech[z.s], touche = z.touche >= 0 ? z.touche : note;
+        const p = clamp(z.pan * (I.largeur ?? 1) + panI, -1, 1), a = (p + 1) * Math.PI / 4, gz = g * z.gain * hum / 32768;
+        const fc = Math.min(z.fc || 20000, 20000) * Math.pow(2, (e.vel - 1) * (I.dynamique ?? 2.5));     // jeu doux = son plus feutré
+        return { d, pos: 0, inc: z.sr / sr * Math.pow(2, ((touche - z.root) * (z.echelle ?? 100) + z.cents) / 1200 + des), fin: d.length - 1,
+          bA: z.bA, bB: z.bB > z.bA + 4 && (z.mode & 1) && !I.sansBoucle ? z.bB : -1, tenu: z.mode === 3,
+          gl: Math.cos(a) * gz * 1.4142, gr: Math.sin(a) * gz * 1.4142, gs: gz * verb, f: fc < 12000 ? new SVF().set(sr, fc, 0.7) : null };
+      });
+      this.excl = z0.excl || 0;
+      // un coup de batterie sonne en entier : la durée écrite ne l'étouffe pas (sauf etouffe: true)
+      const entier = I.entier ?? (I.note != null);
+      this.env = new Env(sr, I.attaque ?? z0.att, Math.max(0.01, (I.chute ?? z0.dec) / 11.5), I.soutien ?? z0.sus, Math.max(0.006, (I.relache ?? z0.rel) / 11.5), entier ? 1e12 : this.off);
+      this.env.v = this.env.ai >= 0.5 ? 1 : 0; if (this.env.v) this.env.st = 1;      // attaque immédiate : pas de rampe qui mange le transitoire
+    }
+    render(L, R, S, a, b) {
+      const E = this.env, C = this.c, n = b - a; let vivant = false;
+      const rel = E.st === 3 || E.n + n >= E.off;
+      for (let i = 0; i < n; i++) ENVB[i] = E.next();
+      for (let k = 0; k < C.length; k++) {
+        const c = C[k]; if (c.pos < 0) continue;
+        const d = c.d, inc = c.inc, bA = c.bA, bB = c.tenu && rel ? -1 : c.bB, fin = c.fin, f = c.f; let pos = c.pos;
+        for (let i = 0; i < n; i++) {
+          if (bB > 0) { if (pos >= bB) pos -= bB - bA; } else if (pos >= fin) { pos = -1; break; }
+          const j = pos | 0, t = pos - j, y0 = j > 0 ? d[j - 1] : d[j], y1 = d[j], y2 = lire(d, j + 1, bA, bB), y3 = lire(d, j + 2, bA, bB);
+          // interpolation de Hermite à 4 points : pas de voile dans l'aigu quand la note est transposée
+          const c1 = 0.5 * (y2 - y0), c2 = y0 - 2.5 * y1 + 2 * y2 - 0.5 * y3, c3 = 0.5 * (y3 - y0) + 1.5 * (y1 - y2);
+          let x = (((c3 * t + c2) * t + c1) * t + y1) * ENVB[i]; if (f) x = f.lp(x);
+          L[a + i] += x * c.gl; R[a + i] += x * c.gr; S[a + i] += x * c.gs; pos += inc;
+        }
+        c.pos = pos; if (pos >= 0) vivant = true;
+      }
+      return vivant && !E.fini();
+    }
+  }
+
+  // Famille de chaque instrument : c'est elle qui range les pistes de la console de mixage
+  const FAMILLES = {};
+  for (const [f, l] of Object.entries({
+    batterie: 'kick kick_electro caisse caisse_militaire rim charley charley_ouvert crash ride clap shaker tom timbales grosse_caisse',
+    basse: 'basse contrebasse_pizz synth_basse', guitares: 'guitare guitare_sat guitare_etouffee', pianos: 'piano rhodes orgue',
+    cordes: 'violons altos violoncelles contrebasses cordes_stacc pizz harpe', cuivres: 'cors trompettes trombones cuivres_stab',
+    synthes: 'nappe synth_lead synth_pluck supersaw synth_cuivres chip talkbox' })) l.split(' ').forEach(t => { FAMILLES[t] = f; });
+
+  const CLASSES = { Echantillon, Synthe, Orgue, Rhodes, Piano, Basse, Corde, Cordes, Cuivres, Bois, Cloche, Choeur, Nappe, Kick, Caisse, Metal, Clap, Tom, Timbale, GrosseCaisse, Shaker, Rim };
 
   // ─── Réverbe (Freeverb) : une par rendu, alimentée par les envois des voix ─────
   function reverbe(S, L, R, n, sr, o) {
@@ -647,8 +712,19 @@ function NOYAU() {
   function resoudre(P) {
     const out = {};
     for (const k in P.instruments) {
-      const I = P.instruments[k], base = PRESETS[I.type] || PRESETS[k] || {};
+      const I = P.instruments[k], type = PRESETS[I.type] ? I.type : PRESETS[k] ? k : I.type;
+      const base = PRESETS[type] || (I.type === 'ech' ? PRESETS[I.secours] || PRESETS.piano : {});
       out[k] = Object.assign({ groupe: 'principal' }, base, I);
+      // vrai instrument : demandé par la partition (ech ou prog), ou associé au type par la banque chargée
+      const direct = I.ech || (I.prog != null ? 'gm:' + (I.banque || 0) + ':' + I.prog : null);
+      const r = P.reel === false || I.reel === false ? null : direct ? { ech: direct } : REEL[type];
+      if (r && JEUX[r.ech]) {
+        out[k] = Object.assign({ groupe: 'principal' }, base, r, I, { classe: 'Echantillon', ech: r.ech });
+        // doublure : le timbre synthétique mélangé au vrai instrument (synthe: 0,3 = 30 % du volume)
+        const d = I.synthe ?? r.synthe; if (d > 0 && base.classe) out[k].doublure = Object.assign({}, base, I, { vol: (I.vol ?? base.vol ?? 0.5) * d });
+      }
+      out[k].famille = I.famille || FAMILLES[type] || 'autres';
+      out[k].piste = P.pistes || P.familles ? [P.pistes ? out[k].groupe : '', P.familles ? out[k].famille : ''].filter(Boolean).join('/') : 'tout';
       if (!CLASSES[out[k].classe]) throw new Error('Instrument inconnu : ' + k + ' (type ' + I.type + ')');
     }
     return out;
@@ -687,7 +763,7 @@ function NOYAU() {
   // Fabrique une section (ou une couche d'une section) : renvoie deux Float32Array stéréo
   function rendre(P, nom, groupe, sr) {
     const t0 = maintenant(), INS = resoudre(P), E = evenements(P, INS, nom);
-    const evts = E.evts.filter(e => groupe === '*' || (!(INS[e.instr].joueur && e.tag) && (groupe === 'tout' || INS[e.instr].groupe === groupe))).sort((x, y) => x.t - y.t || x.i - y.i);
+    const evts = E.evts.filter(e => groupe === '*' || (!(INS[e.instr].joueur && e.tag) && (groupe === 'tout' || INS[e.instr].piste === groupe))).sort((x, y) => x.t - y.t || x.i - y.i);
     let fin = E.duree; for (const e of evts) fin = Math.max(fin, e.t + e.dur);
     const salle = Object.assign({ taille: 0.8, amorti: 0.35, niveau: 1, predelai: 0.02, largeur: 1 }, P.salle);
     const N = Math.ceil((fin + (P.queue ?? (1.5 + salle.taille * 3))) * sr);
@@ -699,8 +775,10 @@ function NOYAU() {
         const e = evts[k], s0 = Math.round(e.t * sr); if (s0 >= end) break; k++;
         const I = INS[e.instr], v = new CLASSES[I.classe](I, e, sr, e.i + 1); v.debut = Math.max(b, s0); v.instr = e.instr;
         if (I.choke) for (const o of actives) if (o.I.choke === I.choke) o.couper();
+        if (v.excl) for (const o of actives) if (o.excl === v.excl && o.I.ech === I.ech) o.couper();      // charley ouvert coupé par le fermé (classe exclusive de la banque)
         const l = parInstr[e.instr] || (parInstr[e.instr] = []); l.push(v); if (l.length > (I.poly ?? 24)) l.shift().couper();
         actives.push(v);
+        if (I.doublure) { const v2 = new CLASSES[I.doublure.classe](I.doublure, e, sr, e.i + 1); v2.debut = v.debut; v2.instr = e.instr; actives.push(v2); }
       }
       for (let j = actives.length - 1; j >= 0; j--) {
         const v = actives[j];
@@ -737,7 +815,7 @@ function NOYAU() {
     return { bpm: 120, queue: 0.4, salle: { niveau: 1 }, instruments: { v: { type: 'violons' }, c: { type: 'cors' }, s: { type: 'cordes_stacc' }, h: { type: 'charley' }, k: { type: 'timbales' } }, sections: { s: { mesures: 1, notes } }, forme: ['s'] };
   })();
 
-  return { rendre, evenements, chronologie, infoSection, resoudre, partitionNote, cleNote, velNote, PRESETS, SONDE, mtof };
+  return { rendre, evenements, chronologie, infoSection, resoudre, partitionNote, cleNote, velNote, PRESETS, SONDE, mtof, poserJeu, associer, FAMILLES, jeux: () => JEUX };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -749,19 +827,29 @@ class Pupitre {
     this.maitre = ctx.createGain(); this.maitre.gain.value = o.volume ?? 0.85;
     const lim = ctx.createDynamicsCompressor();                     // filet de sécurité : rien ne sature
     lim.threshold.value = -6; lim.knee.value = 4; lim.ratio.value = 12; lim.attack.value = 0.002; lim.release.value = 0.15;
-    this.maitre.connect(lim); lim.connect(o.sortie || ctx.destination);
+    this.maitre.connect(lim); lim.connect(o.sortie || ctx.destination); this.limiteur = lim;
     this.calibrage = 0;          // ms, décalage audio réglé par le joueur (Bluetooth : 150 à 300)
     this.niveaux = {}; this.lecture = false; this.t0 = null; this.vit = 1; this._sA = 0; this._cA = 0; this._w = []; this._gen = 0; this.surFin = null;
     this.stats = {};
+    this.jeux = new Map(); this.reel = {}; this.regie = null;
   }
+
+  /** Pose (ou retire, avec null) un jeu d'échantillons : un vrai instrument, transmis aux fils de calcul. Recharger le morceau ensuite. */
+  banque(nom, jeu) {
+    if (jeu) this.jeux.set(nom, jeu); else this.jeux.delete(nom);
+    this.K.poserJeu(nom, jeu); for (const w of this._w) w.postMessage({ jeu: { nom, donnees: jeu || null } });
+  }
+  /** Associe les types d'instruments à des jeux : { piano: { ech: 'gm:0:0' }, kick: { ech: 'gm:128:0', note: 36 } }. */
+  associer(table) { this.reel = table || {}; this.K.associer(this.reel); for (const w of this._w) w.postMessage({ reel: this.reel }); }
 
   _pool() {
     if (this._w.length || this._sansWorker) return;
     const n = this.o.workers ?? Math.max(1, Math.min(3, (navigator.hardwareConcurrency || 2) - 1));
-    const src = 'const K=(' + NOYAU.toString() + ')();self.onmessage=function(e){var d=e.data;try{var r=K.rendre(d.partition,d.section,d.groupe,d.sr);self.postMessage({id:d.id,gen:d.gen,ok:true,L:r.L,R:r.R,info:r.info},[r.L.buffer,r.R.buffer]);}catch(err){self.postMessage({id:d.id,gen:d.gen,ok:false,err:String(err&&err.stack||err)});}};';
+    const src = 'const K=(' + NOYAU.toString() + ')();self.onmessage=function(e){var d=e.data;if(d.jeu){K.poserJeu(d.jeu.nom,d.jeu.donnees);return;}if(d.reel){K.associer(d.reel);return;}try{var r=K.rendre(d.partition,d.section,d.groupe,d.sr);self.postMessage({id:d.id,gen:d.gen,ok:true,L:r.L,R:r.R,info:r.info},[r.L.buffer,r.R.buffer]);}catch(err){self.postMessage({id:d.id,gen:d.gen,ok:false,err:String(err&&err.stack||err)});}};';
     try {
       this._url = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
-      for (let i = 0; i < n; i++) { const w = new Worker(this._url); w.tache = null; w.onmessage = ev => this._recu(w, ev.data); w.onerror = ev => { ev.preventDefault && ev.preventDefault(); this._panne(w, ev.message || 'erreur du worker'); }; this._w.push(w); }
+      for (let i = 0; i < n; i++) { const w = new Worker(this._url); w.tache = null; w.onmessage = ev => this._recu(w, ev.data); w.onerror = ev => { ev.preventDefault && ev.preventDefault(); this._panne(w, ev.message || 'erreur du worker'); }; this._w.push(w);
+        for (const [nom, donnees] of this.jeux) w.postMessage({ jeu: { nom, donnees } }); w.postMessage({ reel: this.reel }); }
     } catch (e) { this._w = []; this._sansWorker = true; }
   }
 
@@ -795,8 +883,11 @@ class Pupitre {
   /** Prépare un morceau. Résout quand la lecture peut aller jusqu'au bout sans attendre. */
   async charger(P, o = {}) {
     this.arreter(0);
+    // avec une console de mixage, une piste par famille d'instruments (batterie, basse, guitares…)
+    if ((o.familles ?? !!this.regie) && !P.familles) P = Object.assign({}, P, { familles: true });
     const gen = ++this._gen; this.P = P; this.INS = this.K.resoudre(P); this.chrono = this.K.chronologie(P);
-    this.groupes = P.pistes ? [...new Set(Object.values(this.INS).map(I => I.groupe))] : ['tout'];
+    if (this.regie && this.regie.surMorceau) this.regie.surMorceau(P, this.INS);
+    this.groupes = P.pistes || P.familles ? [...new Set(Object.values(this.INS).map(I => I.piste))] : ['tout'];
     this.buffers = new Map(); this._evtsCache = new Map(); this._mesures = [];
     const t0 = performance.now(); this._pool();
     this.stats = { workers: this._w.length, horsFil: !this._w.length, faites: 0, total: 0, memoire: 0, voixMax: 0, pic: 0, decrochages: 0, pretEn: null, msParSec: null, toutEn: null };
@@ -804,7 +895,7 @@ class Pupitre {
     this.stats.sr = this.sr;
     const vues = new Map(); for (const x of this.chrono.instances) if (!vues.has(x.nom)) vues.set(x.nom, x.debut);
     this._vides = new Set();
-    this._file = []; for (const [nom, besoin] of vues) for (const g of this.groupes) if (this.groupes.length > 1 && !this._evts(nom).evts.some(e => this.INS[e.instr].groupe === g && !(this.INS[e.instr].joueur && e.tag))) this._vides.add(nom + '|' + g); else this._file.push({ cle: nom + '|' + g, nom, groupe: g, besoin, duree: this.K.infoSection(P, nom).duree, sr: this.sr });
+    this._file = []; for (const [nom, besoin] of vues) for (const g of this.groupes) if (this.groupes.length > 1 && !this._evts(nom).evts.some(e => this.INS[e.instr].piste === g && !(this.INS[e.instr].joueur && e.tag))) this._vides.add(nom + '|' + g); else this._file.push({ cle: nom + '|' + g, nom, groupe: g, besoin, duree: this.K.infoSection(P, nom).duree, sr: this.sr });
     this.notesJ = new Map(); const K = this.K, vuesN = new Map();
     for (const x of this.chrono.instances) for (const e of this._evts(x.nom).evts) {
       if (!(this.INS[e.instr].joueur && e.tag)) continue;
@@ -863,8 +954,13 @@ class Pupitre {
     const ctx = this.ctx; if (ctx.state !== 'running') ctx.resume();
     const depuis = o.depuis || 0, quand = o.quand ?? ctx.currentTime + 0.12;
     this.t0 = quand - depuis; this._depuis = depuis; this._finSignale = false; this.vit = 1; this._sA = 0; this._cA = this.t0;
-    const jeu = ctx.createGain(); jeu.connect(this.maitre); this._jeu = jeu; this._bus = {}; this._sources = new Set();
-    for (const g of this.groupes) { const n = ctx.createGain(); n.gain.value = this.niveaux[g] ?? 1; n.connect(jeu); this._bus[g] = n; }
+    // chaque piste va vers la sortie, ou vers la tranche de sa famille quand une console de mixage est branchée
+    const P = this.P, jeux = new Map(); this._jeu = jeux; this._bus = {}; this._sources = new Set();
+    const vers = fam => { const k = this.regie ? fam : ''; if (!jeux.has(k)) { const j = ctx.createGain(); j.connect(this.regie ? this.regie.entree(fam) : this.maitre); jeux.set(k, j); } return jeux.get(k); };
+    for (const g of this.groupes) {
+      const n = ctx.createGain(); n._grp = P.pistes ? g.split('/')[0] : null; n.gain.value = this.niveaux[n._grp] ?? 1;
+      n.connect(vers(P.familles ? g.split('/').pop() : 'tout')); this._bus[g] = n;
+    }
     this._k = 0; while (true) { const x = this._instance(this._k); if (!x || x.debut + x.duree + 8 > depuis) break; this._k++; }
     this.lecture = true; this._tic(); this._minuteur = setInterval(() => this._tic(), 40);
   }
@@ -918,17 +1014,17 @@ class Pupitre {
   arreter(fondu = 0.05) {
     clearInterval(this._minuteur); this._minuteur = null; this.lecture = false;
     if (this._jeu) {
-      const g = this._jeu.gain, t = this.ctx.currentTime, srcs = this._sources, jeu = this._jeu;
-      g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(0, t + Math.max(0.006, fondu));
-      setTimeout(() => { srcs.forEach(s => { try { s.stop(); } catch (e) {} }); try { jeu.disconnect(); } catch (e) {} }, (Math.max(0.006, fondu) + 0.08) * 1000);
+      const t = this.ctx.currentTime, srcs = this._sources, jeux = [...this._jeu.values()];
+      for (const j of jeux) { const g = j.gain; g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(0, t + Math.max(0.006, fondu)); }
+      setTimeout(() => { srcs.forEach(s => { try { s.stop(); } catch (e) {} }); for (const j of jeux) try { j.disconnect(); } catch (e) {} }, (Math.max(0.006, fondu) + 0.08) * 1000);
     }
     this._jeu = null; this._sources = new Set(); this.t0 = null;
   }
 
   /** Volume d'une couche (partition.pistes = true), en fondu. */
   groupe(nom, gain, fondu = 0.6) {
-    this.niveaux[nom] = gain; const n = this._bus && this._bus[nom];
-    if (n) { const t = this.ctx.currentTime; n.gain.cancelScheduledValues(t); n.gain.setValueAtTime(n.gain.value, t); n.gain.setTargetAtTime(gain, t, Math.max(0.01, fondu / 3)); }
+    this.niveaux[nom] = gain;
+    for (const n of Object.values(this._bus || {})) if (n._grp === nom) { const t = this.ctx.currentTime; n.gain.cancelScheduledValues(t); n.gain.setValueAtTime(n.gain.value, t); n.gain.setTargetAtTime(gain, t, Math.max(0.01, fondu / 3)); }
   }
 
   /** Fait sonner une note du joueur (une entrée de beatmap() avec joueur: true) : à son heure exacte dans le morceau
@@ -938,7 +1034,7 @@ class Pupitre {
     if (!this.lecture || !n) return false;
     const b = this.notesJ && this.notesJ.get(n.cle); if (!b) return false;
     const ctx = this.ctx, now = ctx.currentTime, quand = Math.max(now + 0.005, o.tout ? now + 0.005 : this._heure(n.t));
-    const grp = this.INS[n.instr].groupe, bus = (this._bus && (this._bus[grp] || this._bus.tout || Object.values(this._bus)[0]));
+    const grp = this.INS[n.instr].piste, bus = (this._bus && (this._bus[grp] || this._bus.tout || Object.values(this._bus)[0]));
     const s = ctx.createBufferSource(); s.buffer = b; s.playbackRate.value = this.vit; s._quand = Infinity; s._k = -1;
     const g = ctx.createGain(); g.gain.value = o.gain ?? 1; g.connect(bus); s.connect(g); s.start(quand);
     this._sources.add(s); s.onended = () => { this._sources.delete(s); try { s.disconnect(); g.disconnect(); } catch (e) {} };
@@ -950,7 +1046,7 @@ class Pupitre {
   jouerSon(nom, o = {}) {
     if (!this.lecture) return false;
     const b = this.sonsJ && this.sonsJ.get(nom), d = this.P.sons && this.P.sons[nom]; if (!b || !d) return false;
-    const ctx = this.ctx, I = this.INS[d[0]], bus = this._bus && (this._bus[I && I.groupe] || this._bus.tout || Object.values(this._bus)[0]);
+    const ctx = this.ctx, I = this.INS[d[0]], bus = this._bus && (this._bus[I && I.piste] || this._bus.tout || Object.values(this._bus)[0]);
     const s = ctx.createBufferSource(), g = ctx.createGain(); s.buffer = b; s.playbackRate.value = this.vit; s._quand = Infinity; s._k = -1;
     g.gain.value = o.gain ?? 1; g.connect(bus); s.connect(g); s.start(ctx.currentTime + 0.003);
     this._sources.add(s); s.onended = () => { this._sources.delete(s); try { s.disconnect(); g.disconnect(); } catch (e) {} };
@@ -963,7 +1059,7 @@ class Pupitre {
     const ctx = this.ctx; let ct = null;
     if (ctx.getOutputTimestamp) { const ts = ctx.getOutputTimestamp(); if (ts && ts.contextTime > 0 && ts.performanceTime > 0) ct = ts.contextTime + (perfMs - ts.performanceTime) / 1000; }
     if (ct == null) ct = ctx.currentTime - (ctx.outputLatency || ctx.baseLatency || 0) + (perfMs - performance.now()) / 1000;
-    return this._morceau(ct - this.calibrage / 1000);
+    return this._morceau(ct - this.calibrage / 1000 - (this.regie ? this.regie.latence : 0));     // le traitement de la console retarde le son : l'horloge le sait
   }
   position() { return this.tempsA(performance.now()); }
 
