@@ -137,7 +137,10 @@
       harmonie: Object.fromEntries(Object.entries(H).map(([kk, v]) => [kk, harmonie(v)])), gamme: G0, gammes: {final: Gk, fin: Gk}};
     // integre : aucun bruit de frappe ajouté par-dessus. Chaque brique joue SA note du morceau (retirée de la musique tant qu'on ne la joue pas),
     // avec le son de l'instrument du morceau : ce que fait le joueur est une partie de la musique, pas un bruit à côté.
-    if(cfg.integre){ P.frappe = {}; P.integre = true; return P; }
+    // Le coup de frappe part à l'instant du geste : c'est lui qui donne la sensation de jouer. Pour un morceau « intégré », il est choisi dans le
+    // morceau (un tom grave accordé sur la tonalité, pas un claquement aigu) et le tic aigu des « parfait » est retiré. frappe: false = aucun coup.
+    if(cfg.integre) P.integre = true;
+    if(cfg.frappe === false){ P.frappe = {}; return P; }
     return frappes(P, cfg.frappe);
   }
   window.K7M = {echo, club, hookAuto, batt, chanson, frappes, ROOT, acc, gamme, cahier, proche, ton, voix, motif, charley, harmonie, MODES};

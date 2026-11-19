@@ -12,7 +12,8 @@
      et ne retombe sur ses pieds que toutes les 3 mesures), et l'accord qui revient en écho.
      Basse qui roule entre les kicks, peu d'accords (Dm9 longtemps, puis Bbmaj7 · C9).
      Les briques font partie de la musique : tu joues le riff (un synthé pincé, dans le médium grave, sous l'arpège) et le clap
-     du morceau. Aucun bruit de frappe n'est ajouté : si tu ne joues pas, il manque le riff et le clap, c'est tout.
+     du morceau. Chaque geste donne aussi un coup immédiat, pris dans le morceau : un tom accordé en ré pour couper,
+     un coup de kick court pour taper. Rien d'aigu : le coup répond au doigt, la note tombe sur le temps.
 
    « Lever de soleil » — TRANCE, 138 BPM, fa dièse mineur, final un ton plus haut.
      Émotion : euphorique, bras levés, 9/10 au drop. Signature : l'hymne en 3-3-2 au-dessus de la nappe hachée, et la pause au piano.
@@ -71,7 +72,11 @@
   window.K7PARTITIONS.lab_tunnel = function(){
     const boucle = ['D:m9', 'D:m9', 'D:m9', 'D:m9', 'Bb:maj7', 'Bb:maj7', 'G:m9', 'A:m7'], tour = [0, 2, 3, 1, 2, 4];
     return M.club({
-      bpm: 130, graine: 130, integre: true, cle: ['D', 'eolien'], pompage: {profondeur: .7, duree: .2}, salle: {taille: .7, amorti: .45, niveau: .55, predelai: .03},
+      bpm: 130, graine: 130, integre: true, cle: ['D', 'eolien'],
+      // coups de frappe : graves mais audibles sur un téléphone (qui ne restitue presque rien sous 150 Hz) : toms accordés sur ré entre 220 et 440 Hz,
+      // kick court et saturé pour que ses harmoniques passent
+      frappe: {C: {instr: {type: 'tom', vol: .4, verb: .12}, midi: 62, dur: 1.5}, G: {instr: {type: 'tom', vol: .4, verb: .12}, midi: 65, dur: 1.5}, H: {instr: {type: 'tom', vol: .34, verb: .2}, midi: 57, dur: 2},
+        J: {instr: {type: 'kick_electro', vol: .38, f0: 210, f1: 72, tenue: .12, drive: 3, clic: .3}}, D: {instr: {type: 'tom', vol: .4, verb: .12}, midi: 69, dur: 1.5}},
       prog: {intro: boucle, A: boucle, montee: ['Bb:maj7', 'Bb:maj7', 'C:9', 'A:7sus4'], B: ['D:m9', 'D:m9', 'Bb:maj7', 'C:9', 'D:m9', 'D:m9', 'G:m9', 'A:m7'],
         pause: ['Bb:maj7', 'Bb:maj7', 'F:maj9', 'F:maj9', 'G:m9', 'G:m9', 'A:7sus4', 'A:7sus4'], fin: ['D:m9', 'D:m9']},
       groove: (add, sec, m, c, cn, n) => {
