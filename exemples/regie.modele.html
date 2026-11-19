@@ -154,7 +154,7 @@ const fmtMo = o => (o / 1048576).toFixed(o < 10485760 ? 1 : 0) + ' Mo';
 
 /* ---------- Morceaux : les deux exemples du moteur et les morceaux de Beat Splash ---------- */
 const MORCEAUX = { 'Serment (orchestre)': () => partitionSerment(false), 'Poche soul': () => partitionSoul() };
-for (const [id, fn] of Object.entries(window.K7PARTITIONS || {})) MORCEAUX['Beat Splash · ' + id.replace(/-/g, ' ')] = fn;
+for (const [id, fn] of Object.entries(window.K7PARTITIONS || {})) MORCEAUX['Beat Splash · ' + id.replace(/[-_]/g, ' ')] = fn;
 for (const n of Object.keys(MORCEAUX)) { const o = document.createElement('option'); o.textContent = n; $('ec-morceau').appendChild(o); }
 // Pour l'écoute, les notes du joueur sont remises dans la musique (dans le jeu, c'est le joueur qui les fait sonner)
 function partition() {
@@ -210,9 +210,11 @@ async function lancer() {
   try {
     const P = partition(); let manquants = [];
     if (!banques.source) await banques.reprendre().then(r => { if (r) banquePrete(); });
+    // un dossier « sons/ » posé à côté de la page (banque découpée, livrée avec le jeu) est pris tout seul
+    if (!banques.source) await banques.ouvrirDossier('sons/').then(l => { $('bq-barre').style.width = '100%'; $('bq-retirer').hidden = false; etatBanque('Banque du jeu « ' + (banques.etat.titre || 'sons') + ' » : ' + l.length + ' instruments, chargés à la demande.'); }, () => {});
     if (banques.source && $('ec-reel').checked) {
       $('ec-etat').textContent = 'Préparation des instruments…';
-      const r = await banques.equiper(P, { onProgres: x => { $('ec-barre').style.width = (x.total ? x.faits / x.total * 100 : 0) + '%'; } }); manquants = r.manquants;
+      const r = await banques.equiper(P, { onProgres: x => { $('ec-barre').style.width = (x.total ? x.faits / x.total * 100 : 0) + '%'; } }); manquants = r.manquants.concat(r.pauvres);
     }
     if (moi !== jeton) return;
     $('ec-etat').textContent = 'Fabrication des premières sections…';
@@ -220,7 +222,7 @@ async function lancer() {
     await p.charger(P, { onProgres: s => { if (moi === jeton) stats(s, extra()); } });
     if (moi !== jeton) return;
     const L = $('ec-instr'); L.textContent = '';
-    for (const [k, I] of INS0()) { const d = document.createElement('div'), a = document.createElement('span'), b = document.createElement('span'); a.textContent = k + ' · ' + (I.type || k); const r = I.classe === 'Echantillon'; b.className = r ? 'reel' : 'syn'; b.textContent = r ? 'enregistré' + (I.doublure ? ' + synthé' : '') : 'synthétique'; d.append(a, b); L.appendChild(d); }
+    for (const [k, I] of INS0()) { const d = document.createElement('div'), a = document.createElement('span'), b = document.createElement('span'); a.textContent = k + ' · ' + (I.type || k); const r = I.classe === 'Echantillon'; b.className = r ? 'reel' : 'syn'; b.textContent = r ? 'enregistré' + (I.doublure ? ' + ' + Math.round((I.synthe ?? 0.35) * 100) + ' % de synthé' : '') : 'synthétique'; d.append(a, b); L.appendChild(d); }
     p.surFin = () => { if (moi === jeton) fin('Morceau terminé.'); };
     p.jouer(); stats(p.stats, extra());
     $('ec-jouer').disabled = false; $('ec-jouer').setAttribute('aria-pressed', 'true'); $('ec-txt').textContent = 'Arrêter';
