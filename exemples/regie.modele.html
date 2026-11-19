@@ -1,0 +1,231 @@
+<title>Régie Pupitre</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Mise en page : une colonne ; 1 la banque de sons, 2 l'écoute (avant / après), 3 la console de mixage. */
+:root{
+  --fond:#f1f2f6; --surface:#ffffff; --creux:#e4e6ee; --trait:#d2d5e1;
+  --encre:#161928; --encre-2:#545a72;
+  --cuivre:#9a5c14; --cuivre-fort:#7a470c; --sur-cuivre:#ffffff;
+  --piste:#1a1d2e; --piste-trait:#33374f; --piste-encre:#e8e9f2;
+  --bon:#1d7f4c; --moyen:#9a6b00; --mauvais:#b0372a;
+  --titre:"Archivo","Arial Narrow",system-ui,sans-serif;
+  --texte:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --fond:#0e1018; --surface:#171a26; --creux:#20243a; --trait:#2c3046;
+  --encre:#e8e9f1; --encre-2:#a2a7bf;
+  --cuivre:#e2a24a; --cuivre-fort:#f0bd72; --sur-cuivre:#1b1205;
+  --piste:#0a0c13; --piste-trait:#2a2e44; --piste-encre:#e8e9f2;
+  --bon:#4fcf8a; --moyen:#e3b341; --mauvais:#ff8270; color-scheme:dark } }
+:root[data-theme="dark"]{
+  --fond:#0e1018; --surface:#171a26; --creux:#20243a; --trait:#2c3046;
+  --encre:#e8e9f1; --encre-2:#a2a7bf;
+  --cuivre:#e2a24a; --cuivre-fort:#f0bd72; --sur-cuivre:#1b1205;
+  --piste:#0a0c13; --piste-trait:#2a2e44; --piste-encre:#e8e9f2;
+  --bon:#4fcf8a; --moyen:#e3b341; --mauvais:#ff8270; color-scheme:dark }
+
+body{background:var(--fond);color:var(--encre);font-family:var(--texte);font-size:16px;line-height:1.5}
+.page{max-width:760px;margin:0 auto;padding-block:28px 64px;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));
+  display:flex;flex-direction:column;gap:44px}
+.sur{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--cuivre-fort)}
+h1{font-family:var(--titre);font-stretch:78%;font-weight:800;font-size:clamp(48px,14vw,92px);line-height:.9;margin:8px 0 14px;letter-spacing:-.01em}
+h2{font-family:var(--titre);font-stretch:85%;font-weight:700;font-size:28px;line-height:1.1;margin:0;text-wrap:balance}
+h3{font-family:var(--titre);font-weight:700;font-size:17px;margin:0}
+p{margin:0;max-width:64ch}
+.doux{color:var(--encre-2);font-size:14.5px}
+section{display:flex;flex-direction:column;gap:16px;min-width:0}
+.bloc{background:var(--surface);border:1px solid var(--trait);border-radius:18px;padding:18px;display:flex;flex-direction:column;gap:16px;min-width:0}
+
+/* boutons */
+.ligne{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.gros{font-family:var(--titre);font-stretch:90%;font-weight:700;font-size:21px;border:0;border-radius:999px;cursor:pointer;background:var(--cuivre);color:var(--sur-cuivre);padding:16px 28px;display:inline-flex;align-items:center;gap:12px}
+.gros:hover{background:var(--cuivre-fort)}
+.gros[aria-pressed="true"]{background:var(--encre);color:var(--fond)}
+.gros:disabled{opacity:.6;cursor:progress}
+.gros .ico{width:0;height:0;border-left:15px solid currentColor;border-top:9px solid transparent;border-bottom:9px solid transparent}
+.gros[aria-pressed="true"] .ico{width:14px;height:14px;border:0;background:currentColor;border-radius:2px}
+.bt{font-family:var(--texte);font-weight:600;font-size:14.5px;border-radius:999px;padding:9px 16px;cursor:pointer;border:1.5px solid var(--encre);background:transparent;color:var(--encre)}
+.bt:hover{background:var(--creux)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--cuivre);outline-offset:2px}
+.coche{display:flex;gap:10px;align-items:center;font-weight:500}
+.coche input{width:22px;height:22px;accent-color:var(--cuivre);flex:none}
+
+/* progression et stats */
+.barre{height:10px;border-radius:999px;background:var(--creux);overflow:hidden}
+.barre i{display:block;height:100%;width:0;background:var(--cuivre)}
+@media (prefers-reduced-motion:no-preference){ .barre i{transition:width .2s} }
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px 12px}
+.stats div{min-width:0;border-top:2px solid var(--trait);padding-top:8px}
+.stats div.ok{border-top-color:var(--bon)} .stats div.ko{border-top-color:var(--mauvais)}
+@media (max-width:560px){ .stats{grid-template-columns:repeat(2,minmax(0,1fr))} }
+.etat{font-size:14.5px;min-height:1.4em;color:var(--encre-2)}
+.etat.ko{color:var(--mauvais)}
+.couches{display:flex;flex-wrap:wrap;gap:10px}
+.couches button{font-family:var(--texte);font-weight:600;font-size:14.5px;padding:10px 16px;border-radius:12px;border:1.5px solid var(--cuivre);background:var(--cuivre);color:var(--sur-cuivre);cursor:pointer}
+.couches button[aria-pressed="false"]{background:transparent;color:var(--encre);border-color:var(--trait)}
+.temps{font-family:var(--mono);font-size:14px;color:var(--encre-2);font-variant-numeric:tabular-nums}
+
+
+h1{font-size:clamp(44px,13vw,84px)}
+.lab{font-family:var(--mono);font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--encre-2);display:block}
+.val{font-family:var(--mono);font-weight:600;font-size:18px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+details > summary{cursor:pointer;font-weight:600;padding:6px 0}
+.fichier{position:relative;overflow:hidden}
+.fichier input{position:absolute;inset:0;opacity:0;cursor:pointer;font-size:0}
+.fichier:focus-within{outline:3px solid var(--cuivre);outline-offset:2px}
+.liste{display:flex;flex-direction:column;border-top:1px solid var(--trait)}
+.liste > div{display:grid;grid-template-columns:1fr auto;gap:2px 14px;padding:9px 0;border-bottom:1px solid var(--trait);font-size:14.5px}
+.liste .reel{color:var(--bon);font-weight:600} .liste .syn{color:var(--encre-2)}
+a{color:var(--cuivre-fort)}
+</style>
+
+<div class="page">
+  <header>
+    <div class="sur">Moteur musique · jeux de Seb · régie</div>
+    <h1>Régie</h1>
+    <p>De vrais instruments enregistrés à la place des timbres synthétiques, puis une console pour doser chaque famille. Les partitions ne changent pas : les notes à taper tombent au même endroit.</p>
+  </header>
+
+  <section>
+    <div><div class="sur">Étape 1</div><h2>Banque de sons</h2></div>
+    <p class="doux">Choisis un fichier <b>.sf2</b> (SoundFont 2). Il reste sur cet appareil : la prochaine fois, il est repris sans rien retélécharger. Une banque libre et complète pour commencer : <a href="https://github.com/mrbumpy409/GeneralUser-GS" target="_blank" rel="noopener">GeneralUser GS</a> (environ 30 Mo).</p>
+    <div class="bloc">
+      <div class="ligne">
+        <label class="gros fichier"><span>Choisir une banque .sf2</span><input type="file" id="bq-fichier" accept=".sf2,audio/x-soundfont" aria-label="Choisir une banque de sons .sf2"></label>
+        <button class="bt" id="bq-retirer" type="button" hidden>Revenir au synthétique</button>
+        <button class="bt" id="bq-oublier" type="button" hidden>Effacer de l’appareil</button>
+      </div>
+      <div class="barre" aria-hidden="true"><i id="bq-barre"></i></div>
+      <div class="etat" id="bq-etat" role="status">Aucune banque : tout est joué par les timbres synthétiques.</div>
+    </div>
+  </section>
+
+  <section>
+    <div><div class="sur">Étape 2</div><h2>Écoute</h2></div>
+    <div class="bloc">
+      <div class="ligne">
+        <label class="coche" for="ec-morceau">Morceau <select id="ec-morceau"></select></label>
+      </div>
+      <div class="ligne">
+        <button class="gros" id="ec-jouer" type="button" aria-pressed="false"><span class="ico" aria-hidden="true"></span><span id="ec-txt">Charger et jouer</span></button>
+        <label class="coche" for="ec-reel"><input type="checkbox" id="ec-reel" checked> Vrais instruments</label>
+        <label class="coche" for="ec-double"><input type="checkbox" id="ec-double"> Doublés par le synthé</label>
+      </div>
+      <div class="barre" aria-hidden="true"><i id="ec-barre"></i></div>
+      <div class="etat" id="ec-etat" role="status">Rien de chargé.</div>
+      <div class="stats" id="ec-stats"></div>
+      <div class="temps" id="ec-temps"></div>
+      <details><summary>Instruments de ce morceau</summary><div class="liste" id="ec-instr"></div></details>
+    </div>
+  </section>
+
+  <section>
+    <div><div class="sur">Étape 3</div><h2>Console de mixage</h2></div>
+    <p class="doux">Chaque famille d’instruments a sa piste. Les réglages s’entendent tout de suite et sont gardés sur cet appareil.</p>
+    <div id="regie"><p class="doux">La console apparaît au premier morceau chargé.</p></div>
+  </section>
+</div>
+
+<script>
+/*__PUPITRE__*/
+</script>
+<script>
+/*__BANQUES__*/
+</script>
+<script>
+/*__CONSOLE__*/
+</script>
+<script>
+/*__PARTITIONS__*/
+</script>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+let ctx = null, pupitre = null, banques = null, regie = null, enLecture = false, minuteur = null, jeton = 0;
+const fmtMs = v => v == null ? '–' : v < 1000 ? Math.round(v) + ' ms' : (v / 1000).toFixed(1) + ' s';
+const fmtMo = o => (o / 1048576).toFixed(o < 10485760 ? 1 : 0) + ' Mo';
+
+/* ---------- Morceaux : les deux exemples du moteur et les morceaux de Beat Splash ---------- */
+const MORCEAUX = { 'Serment (orchestre)': () => partitionSerment(false), 'Poche soul': () => partitionSoul() };
+for (const [id, fn] of Object.entries(window.K7PARTITIONS || {})) MORCEAUX['Beat Splash · ' + id.replace(/-/g, ' ')] = fn;
+for (const n of Object.keys(MORCEAUX)) { const o = document.createElement('option'); o.textContent = n; $('ec-morceau').appendChild(o); }
+// Pour l'écoute, les notes du joueur sont remises dans la musique (dans le jeu, c'est le joueur qui les fait sonner)
+function partition() {
+  const P = MORCEAUX[$('ec-morceau').value](); P.instruments = Object.assign({}, P.instruments);
+  for (const k in P.instruments) P.instruments[k] = Object.assign({}, P.instruments[k], { joueur: false }, $('ec-double').checked ? { synthe: 0.35 } : {});
+  if (!$('ec-reel').checked) P.reel = false;
+  return P;
+}
+
+function audio() {
+  if (!ctx) {
+    ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+    pupitre = new Pupitre(ctx); banques = new PupitreBanques(pupitre); regie = new PupitreRegie(pupitre, { profil: 'auto' });
+    regie.panneau($('regie'));
+  }
+  if (ctx.state !== 'running') ctx.resume();
+  return pupitre;
+}
+
+/* ---------- Banque ---------- */
+function etatBanque(txt, ko) { $('bq-etat').className = 'etat' + (ko ? ' ko' : ''); $('bq-etat').textContent = txt; }
+function banquePrete() {
+  const e = banques.etat; $('bq-barre').style.width = '100%'; $('bq-retirer').hidden = false; $('bq-oublier').hidden = !e.enCache;
+  etatBanque('« ' + (e.titre || e.nom) + ' » ouverte : ' + banques.source.presets.length + ' instruments, ' + fmtMo(e.octets) + (e.enCache ? ', gardée sur l’appareil.' : ' (non gardée : le stockage est indisponible ici).'));
+}
+async function ouvrirBanque(src, nom) {
+  audio(); etatBanque('Lecture de la banque…'); $('bq-barre').style.width = '0%';
+  try {
+    await banques.ouvrir(src, { nom, onProgres: p => { $('bq-barre').style.width = (p.total ? p.recu / p.total * 100 : 0) + '%'; } });
+    banquePrete(); if (enLecture) lancer();
+  } catch (e) { etatBanque(e.message, true); }
+}
+$('bq-fichier').addEventListener('change', ev => { const f = ev.target.files[0]; if (f) ouvrirBanque(f, f.name); });
+$('bq-retirer').addEventListener('click', () => { banques.retirer(); banques.source = null; $('bq-retirer').hidden = true; $('bq-barre').style.width = '0%'; etatBanque('Retour aux timbres synthétiques.'); if (enLecture) lancer(); });
+$('bq-oublier').addEventListener('click', async () => { await PupitreBanques.oublier(banques.etat.nom); $('bq-oublier').hidden = true; etatBanque('Banque effacée de l’appareil. Elle reste utilisable jusqu’à la fermeture de la page.'); });
+// Une banque déjà gardée sur l'appareil est proposée sans rien retélécharger
+PupitreBanques.enCache().then(l => { let nom = null; try { nom = localStorage.getItem('pupitre.banque'); } catch (e) {} if (nom && l.includes(nom)) { etatBanque('« ' + nom + ' » est gardée sur cet appareil : elle sera reprise à la première lecture.'); } });
+
+/* ---------- Écoute ---------- */
+function stats(s, extra) {
+  $('ec-barre').style.width = (s.total ? s.faites / s.total * 100 : 0) + '%';
+  const cases = [['Prêt à jouer en', fmtMs(s.pretEn), s.pretEn != null && s.pretEn < 3000 ? 'ok' : ''], ['Tout fabriqué en', fmtMs(s.toutEn), ''],
+    ['Vrais instruments', extra.reels + ' sur ' + extra.total, extra.reels ? 'ok' : ''], ['Pistes', pupitre.groupes ? pupitre.groupes.length : '–', ''],
+    ['Mémoire musique', s.memoire ? s.memoire.toFixed(0) + ' Mo' : '–', ''], ['Mémoire banque', banques.etat.memoire ? banques.etat.memoire.toFixed(1) + ' Mo' : '–', ''],
+    ['Fils de calcul', s.horsFil ? '0 (relais)' : s.workers, s.horsFil ? 'ko' : ''], ['Décrochages', s.decrochages, s.faites ? (s.decrochages ? 'ko' : 'ok') : '']];
+  const el = $('ec-stats'); el.textContent = '';
+  for (const [l, v, c] of cases) { const d = document.createElement('div'); if (c) d.className = c; d.innerHTML = '<span class="lab"></span><span class="val"></span>'; d.children[0].textContent = l; d.children[1].textContent = v; el.appendChild(d); }
+}
+function fin(txt) { clearInterval(minuteur); enLecture = false; $('ec-jouer').setAttribute('aria-pressed', 'false'); $('ec-txt').textContent = 'Charger et jouer'; $('ec-jouer').disabled = false; if (txt) $('ec-etat').textContent = txt; }
+async function lancer() {
+  const p = audio(), moi = ++jeton; clearInterval(minuteur); enLecture = true;
+  $('ec-jouer').disabled = true; $('ec-txt').textContent = 'Fabrication…'; $('ec-etat').className = 'etat';
+  try {
+    const P = partition(); let manquants = [];
+    if (!banques.source) await banques.reprendre().then(r => { if (r) banquePrete(); });
+    if (banques.source && $('ec-reel').checked) {
+      $('ec-etat').textContent = 'Préparation des instruments…';
+      const r = await banques.equiper(P, { onProgres: x => { $('ec-barre').style.width = (x.total ? x.faits / x.total * 100 : 0) + '%'; } }); manquants = r.manquants;
+    }
+    if (moi !== jeton) return;
+    $('ec-etat').textContent = 'Fabrication des premières sections…';
+    const INS0 = () => Object.entries(pupitre.INS), extra = () => ({ reels: INS0().filter(([, I]) => I.classe === 'Echantillon').length, total: INS0().length });
+    await p.charger(P, { onProgres: s => { if (moi === jeton) stats(s, extra()); } });
+    if (moi !== jeton) return;
+    const L = $('ec-instr'); L.textContent = '';
+    for (const [k, I] of INS0()) { const d = document.createElement('div'), a = document.createElement('span'), b = document.createElement('span'); a.textContent = k + ' · ' + (I.type || k); const r = I.classe === 'Echantillon'; b.className = r ? 'reel' : 'syn'; b.textContent = r ? 'enregistré' + (I.doublure ? ' + synthé' : '') : 'synthétique'; d.append(a, b); L.appendChild(d); }
+    p.surFin = () => { if (moi === jeton) fin('Morceau terminé.'); };
+    p.jouer(); stats(p.stats, extra());
+    $('ec-jouer').disabled = false; $('ec-jouer').setAttribute('aria-pressed', 'true'); $('ec-txt').textContent = 'Arrêter';
+    const x = extra(); $('ec-etat').textContent = 'Lecture lancée après ' + fmtMs(p.stats.pretEn) + ' · ' + (x.reels ? x.reels + ' vrais instruments sur ' + x.total : 'tout en synthétique') + (regie.latence ? ' · retard de la console compensé : ' + Math.round(regie.latence * 1000) + ' ms' : '') + '.';
+    minuteur = setInterval(() => { if (moi !== jeton) return; const t = Math.max(0, p.position()), d = p.duree; $('ec-temps').textContent = Math.floor(t / 60) + ':' + String(Math.floor(t % 60)).padStart(2, '0') + (p.chrono.boucle ? ' (boucle)' : ' / ' + Math.floor(d / 60) + ':' + String(Math.round(d % 60)).padStart(2, '0')); stats(p.stats, extra()); }, 250);
+  } catch (e) { if (String(e.message) === 'remplacé') return; fin(); $('ec-etat').className = 'etat ko'; $('ec-etat').textContent = 'Échec : ' + e.message; }
+}
+$('ec-jouer').addEventListener('click', () => { if (enLecture) { jeton++; pupitre.arreter(0.15); fin('Arrêté.'); } else lancer(); });
+for (const id of ['ec-morceau', 'ec-reel', 'ec-double']) $(id).addEventListener('change', () => { if (enLecture) lancer(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && enLecture) { jeton++; pupitre.arreter(0.15); fin('Arrêté.'); } });
+</script>

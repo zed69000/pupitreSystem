@@ -69,6 +69,10 @@ partition
 | Batterie | `kick`, `kick_electro`, `caisse`, `rim`, `charley`, `charley_ouvert`, `crash`, `ride`, `clap`, `shaker`, `tom` | `f0`, `f1`, `tenue`, `ton`, `timbre`, `bruit`, `fc`, `hp`, `base` |
 | Orchestre | `timbales`, `grosse_caisse`, `caisse_militaire` | `tenue` |
 
+## Vrais instruments
+
+Avec une banque de sons chargée (voir [regie.md](regie.md)), les mêmes types sont joués par des notes enregistrées. Clés propres : `reel: false` (garder le synthé), `synthe: 0.3` (doublure synthétique), `type: 'ech', prog: 40, secours: 'violons'` (programme General MIDI précis), `dynamique`, `desaccord`, `entier`, `largeur`. `famille` range l'instrument dans une autre piste de la console.
+
 ## Aides d’écriture
 
 ```js
