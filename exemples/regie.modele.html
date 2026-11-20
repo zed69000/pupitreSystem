@@ -55,6 +55,13 @@ section{display:flex;flex-direction:column;gap:16px;min-width:0}
 .bt:hover{background:var(--creux)}
 button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--cuivre);outline-offset:2px}
 .coche{display:flex;gap:10px;align-items:center;font-weight:500}
+.notes{display:grid;gap:6px;margin:10px 0}
+.notes > div{display:grid;grid-template-columns:44px 1fr auto;gap:10px;align-items:center;padding:4px 6px;border-radius:12px}
+.notes > div.ici{background:rgba(214,163,90,.16)}
+.notes button{width:44px;height:44px;border-radius:50%;padding:0;font-size:16px}
+.notes select{font:inherit;padding:8px 6px;border-radius:10px;min-width:64px}
+.notes .nom{overflow-wrap:anywhere}
+#ec-texte{width:100%;box-sizing:border-box;font:inherit;margin-top:8px;border-radius:10px;padding:8px}
 .coche input{width:22px;height:22px;accent-color:var(--cuivre);flex:none}
 
 /* progression et stats */
@@ -122,6 +129,11 @@ a{color:var(--cuivre-fort)}
       <div class="etat" id="ec-etat" role="status">Rien de chargé.</div>
       <div class="stats" id="ec-stats"></div>
       <div class="temps" id="ec-temps"></div>
+      <details open><summary>Tous les morceaux : écouter et noter</summary>
+        <div class="notes" id="ec-notes"></div>
+        <div class="ligne"><button id="ec-copier" type="button">Copier mes notes</button><span class="etat" id="ec-copie" role="status"></span></div>
+        <textarea id="ec-texte" rows="4" readonly hidden aria-label="Mes notes"></textarea>
+      </details>
       <details><summary>Instruments de ce morceau</summary><div class="liste" id="ec-instr"></div></details>
     </div>
   </section>
@@ -232,5 +244,27 @@ async function lancer() {
 }
 $('ec-jouer').addEventListener('click', () => { if (enLecture) { jeton++; pupitre.arreter(0.15); fin('Arrêté.'); } else lancer(); });
 for (const id of ['ec-morceau', 'ec-reel', 'ec-double']) $(id).addEventListener('change', () => { if (enLecture) lancer(); });
+/* ---------- Tous les morceaux : un bouton d'écoute et une note sur 10 par morceau ---------- */
+{
+  const CLE = 'pupitre.notes'; let notes = {}; try { notes = JSON.parse(localStorage.getItem(CLE) || '{}') || {}; } catch (e) {}
+  const L = $('ec-notes'), noms = Object.keys(MORCEAUX), court = n => n.replace('Beat Splash · ', '');
+  const texte = () => noms.map((n, i) => notes[n] ? (i + 1) + '. ' + court(n) + ' : ' + notes[n] + '/10' : null).filter(Boolean).join('\n');
+  const marquer = () => { [...L.children].forEach((d, i) => { const ici = enLecture && $('ec-morceau').value === noms[i]; d.classList.toggle('ici', ici); d.firstChild.textContent = ici ? '■' : '▶'; d.firstChild.setAttribute('aria-label', (ici ? 'Arrêter ' : 'Écouter ') + court(noms[i])); }); };
+  noms.forEach((n, i) => {
+    const d = document.createElement('div'), b = document.createElement('button'), t = document.createElement('span'), s = document.createElement('select');
+    b.type = 'button'; t.className = 'nom'; t.textContent = (i + 1) + '. ' + court(n); s.setAttribute('aria-label', 'Note de ' + court(n));
+    for (let v = 0; v <= 10; v++) { const o = document.createElement('option'); o.value = v || ''; o.textContent = v ? v + '/10' : 'Note'; s.appendChild(o); }
+    s.value = notes[n] || '';
+    s.addEventListener('change', () => { if (s.value) notes[n] = +s.value; else delete notes[n]; try { localStorage.setItem(CLE, JSON.stringify(notes)); } catch (e) {} if (!$('ec-texte').hidden) $('ec-texte').value = texte(); });
+    b.addEventListener('click', () => { const ici = enLecture && $('ec-morceau').value === n; if (ici) { jeton++; pupitre.arreter(0.15); fin('Arrêté.'); } else { $('ec-morceau').value = n; lancer(); } marquer(); });
+    d.append(b, t, s); L.appendChild(d);
+  });
+  marquer(); setInterval(marquer, 500);
+  $('ec-copier').addEventListener('click', async () => {
+    const tx = texte() || 'Aucune note pour le moment.'; $('ec-texte').hidden = false; $('ec-texte').value = tx;
+    try { await navigator.clipboard.writeText(tx); $('ec-copie').textContent = 'Copié : colle-le dans la conversation.'; }
+    catch (e) { $('ec-texte').select(); $('ec-copie').textContent = 'Sélectionne le texte ci-dessous et copie-le.'; }
+  });
+}
 document.addEventListener('visibilitychange', () => { if (document.hidden && enLecture) { jeton++; pupitre.arreter(0.15); fin('Arrêté.'); } });
 </script>
